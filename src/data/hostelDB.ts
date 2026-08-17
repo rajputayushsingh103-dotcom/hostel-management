@@ -13,9 +13,9 @@ export interface StudentRecord {
   registeredAt: string;
 }
 
-const STORAGE_KEY_STUDENTS = 'hostel_hub_real_students_db';
+const STORAGE_KEY = 'hostel_master_students_v3';
 
-const INITIAL_STUDENTS: StudentRecord[] = [
+const DEFAULT_DATA: StudentRecord[] = [
   {
     studentId: 'std-101',
     name: 'Aayush Singh',
@@ -30,28 +30,28 @@ const INITIAL_STUDENTS: StudentRecord[] = [
 ];
 
 export const hostelDB = {
-  // 1. Saare Students fetch karna
+  // Direct Live Read
   getAllStudents: (): StudentRecord[] => {
-    const data = localStorage.getItem(STORAGE_KEY_STUDENTS);
-    if (!data) {
-      localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(INITIAL_STUDENTS));
-      return INITIAL_STUDENTS;
-    }
     try {
+      const data = localStorage.getItem(STORAGE_KEY);
+      if (!data) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_DATA));
+        return DEFAULT_DATA;
+      }
       return JSON.parse(data);
     } catch (e) {
-      return INITIAL_STUDENTS;
+      return DEFAULT_DATA;
     }
   },
 
-  // 2. Naya Student Add karna
+  // Add Student
   addStudent: (newStudent: StudentRecord): void => {
     const students = hostelDB.getAllStudents();
     students.push(newStudent);
-    localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(students));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(students));
   },
 
-  // 3. ✏️ Student Update karna (Roll No, Password, Room sabhi)
+  // Update Student
   updateStudent: (studentId: string, updatedFields: Partial<StudentRecord>): void => {
     const students = hostelDB.getAllStudents();
     const updated = students.map((s) => {
@@ -60,30 +60,37 @@ export const hostelDB = {
       }
       return s;
     });
-    localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   },
 
-  // 4. Student Delete karna
+  // Delete Student
   deleteStudent: (studentId: string): void => {
     const students = hostelDB.getAllStudents();
-    const updatedStudents = students.filter((s) => s.studentId !== studentId);
-    localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(updatedStudents));
+    const updated = students.filter((s) => s.studentId !== studentId);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   },
 
-  // 5. 🎯 Real Student Login Match (Roll Number + Password)
+  // 🎯 Live Direct Login Check
   authenticateStudent: (rollNo: string, password: string): StudentRecord | null => {
-    const students = hostelDB.getAllStudents();
-    const cleanRoll = rollNo.trim().toLowerCase();
-    const cleanPass = password.trim();
+    const data = localStorage.getItem(STORAGE_KEY);
+    const students: StudentRecord[] = data ? JSON.parse(data) : DEFAULT_DATA;
+    
+    const inputRoll = rollNo.trim().toLowerCase();
+    const inputPass = password.trim();
 
-    const student = students.find(
-      (s) =>
-        s.rollNo.trim().toLowerCase() === cleanRoll &&
-        s.password.trim() === cleanPass
+    const matched = students.find(
+      (s) => s.rollNo.trim().toLowerCase() === inputRoll && s.password.trim() === inputPass
     );
-    return student || null;
+    return matched || null;
   },
 
-  verifyWardenPassword: (password: string): boolean => password.trim() === 'warden@123' || password.trim() === 'warden123',
-  verifyAdminPassword: (password: string): boolean => password.trim() === 'admin@123' || password.trim() === 'admin123'
+  verifyWardenPassword: (password: string): boolean => {
+    const p = password.trim();
+    return p === 'warden@123' || p === 'warden123';
+  },
+
+  verifyAdminPassword: (password: string): boolean => {
+    const p = password.trim();
+    return p === 'admin@123' || p === 'admin123';
+  }
 };
