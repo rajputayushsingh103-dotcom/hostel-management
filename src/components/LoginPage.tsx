@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { hostelDB } from '../data/hostelDB';
 import {
   ShieldCheck,
@@ -8,7 +8,8 @@ import {
   LogIn,
   AlertCircle,
   School,
-  Database
+  Database,
+  RefreshCw
 } from 'lucide-react';
 import { UserAuthSession, Role } from '../types';
 
@@ -28,12 +29,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [adminPassword, setAdminPassword] = useState('');
   
   const [errorMsg, setErrorMsg] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [liveStudentCount, setLiveStudentCount] = useState<number>(0);
 
-  // Live count of students currently in database
-  const liveStudentCount = hostelDB.getAllStudents().length;
+  // 🟢 Live Sync Counter with Google Cloud
+  useEffect(() => {
+    const unsubscribe = hostelDB.subscribeToStudents((students) => {
+      setLiveStudentCount(students.length);
+    });
+    return () => unsubscribe();
+  }, []);
 
-  // 1. Student Login
-  const handleStudentLogin = (e: React.FormEvent) => {
+  // 1. 🟢 Student Cloud Login
+  const handleStudentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -42,23 +50,32 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       return;
     }
 
-    // Direct DB Check
-    const student = hostelDB.authenticateStudent(studentRoll, studentPassword);
+    setIsAuthenticating(true);
 
-    if (student) {
-      onLogin({
-        role: 'student',
-        studentId: student.studentId,
-        name: student.name,
-        rollNo: student.rollNo,
-        block: student.block,
-        roomNumber: student.roomNumber,
-        year: student.year,
-        faceVerified: true,
-        parentPhone: student.parentPhone
-      });
-    } else {
-      setErrorMsg(`Galat Credentials! Roll: "${studentRoll}" aur Password database me match nahi hua.`);
+    try {
+      // Direct Cloud DB Verification
+      const student = await hostelDB.authenticateStudent(studentRoll, studentPassword);
+
+      if (student) {
+        onLogin({
+          role: 'student',
+          studentId: student.studentId,
+          name: student.name,
+          rollNo: student.rollNo,
+          block: student.block,
+          roomNumber: student.roomNumber,
+          year: student.year,
+          faceVerified: true,
+          parentPhone: student.parentPhone
+        });
+      } else {
+        setErrorMsg(`Galat Credentials! Roll: "${studentRoll}" aur Password cloud database me match nahi hua.`);
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Cloud database se connect karne me problem hui. Internet check karein.');
+    } finally {
+      setIsAuthenticating(false);
     }
   };
 
@@ -108,7 +125,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         </h1>
         <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-400 font-mono mt-1">
           <Database className="w-3.5 h-3.5" />
-          <span>Live Database Synced ({liveStudentCount} Enrolled Students)</span>
+          <span>Google Cloud Database Synced ({liveStudentCount} Enrolled Students)</span>
         </div>
       </div>
 
@@ -190,10 +207,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
             <button
               type="submit"
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2"
+              disabled={isAuthenticating}
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2"
             >
-              <LogIn className="w-4 h-4" />
-              <span>Login to Student Portal</span>
+              {isAuthenticating ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Verifying from Cloud...</span>
+                </>
+              ) : (
+                <>
+                  <LogIn className="w-4 h-4" />
+                  <span>Login to Student Portal</span>
+                </>
+              )}
             </button>
           </form>
         )}

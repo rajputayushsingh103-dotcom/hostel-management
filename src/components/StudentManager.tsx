@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { hostelDB, StudentRecord } from '../data/hostelDB';
-import { UserMinus, UserPlus, Search, CheckCircle, Phone, DoorOpen, Edit3, X, Save, Lock, Building2, Calendar, Hash } from 'lucide-react';
+import { UserMinus, UserPlus, Search, CheckCircle, DoorOpen, Edit3, X, RefreshCw } from 'lucide-react';
 import { BlockName } from '../types';
 
 export const StudentManager: React.FC = () => {
-  const [students, setStudents] = useState<StudentRecord[]>(() => hostelDB.getAllStudents());
+  const [students, setStudents] = useState<StudentRecord[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -21,22 +22,28 @@ export const StudentManager: React.FC = () => {
   // Edit State
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
 
-  const reloadData = () => {
-    setStudents(hostelDB.getAllStudents());
-  };
+  // 🟢 Realtime Cloud Listener (Laptop aur Mobile dono me automatic update)
+  useEffect(() => {
+    setLoading(true);
+    const unsubscribe = hostelDB.subscribeToStudents((cloudStudents) => {
+      setStudents(cloudStudents);
+      setLoading(false);
+    });
 
-  // Delete
-  const handleDeleteStudent = (student: StudentRecord) => {
+    return () => unsubscribe();
+  }, []);
+
+  // Delete from Cloud
+  const handleDeleteStudent = async (student: StudentRecord) => {
     if (window.confirm(`Kya aap ${student.name} (${student.rollNo}) ko database se remove karna chahte hain?`)) {
-      hostelDB.deleteStudent(student.studentId);
-      reloadData();
-      setSuccessMsg(`Student ${student.name} deleted.`);
+      await hostelDB.deleteStudent(student.rollNo || student.studentId);
+      setSuccessMsg(`Student ${student.name} deleted globally.`);
       setTimeout(() => setSuccessMsg(''), 3000);
     }
   };
 
-  // Add
-  const handleAddStudent = (e: React.FormEvent) => {
+  // Add to Cloud
+  const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password.trim()) {
       alert('Password dalein!');
@@ -46,7 +53,7 @@ export const StudentManager: React.FC = () => {
     const newStd: StudentRecord = {
       studentId: `std-${Date.now()}`,
       name: name.trim(),
-      rollNo: rollNo.trim(),
+      rollNo: rollNo.trim().toUpperCase(),
       roomNumber: roomNumber.trim(),
       block,
       year: Number(year),
@@ -55,8 +62,7 @@ export const StudentManager: React.FC = () => {
       registeredAt: new Date().toISOString().split('T')[0]
     };
 
-    hostelDB.addStudent(newStd);
-    reloadData();
+    await hostelDB.addStudent(newStd);
     setShowAddForm(false);
 
     setName('');
@@ -65,18 +71,18 @@ export const StudentManager: React.FC = () => {
     setPassword('');
     setParentPhone('');
 
-    setSuccessMsg(`✅ Student ${newStd.name} (Roll: ${newStd.rollNo}) saved!`);
+    setSuccessMsg(`✅ Student ${newStd.name} (Roll: ${newStd.rollNo}) Cloud Database me save ho gaya!`);
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  // Save Edit
-  const handleSaveEdit = (e: React.FormEvent) => {
+  // Save Edit to Cloud
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent) return;
 
-    hostelDB.updateStudent(editingStudent.studentId, {
+    await hostelDB.updateStudent(editingStudent.studentId, {
       name: editingStudent.name.trim(),
-      rollNo: editingStudent.rollNo.trim(),
+      rollNo: editingStudent.rollNo.trim().toUpperCase(),
       roomNumber: editingStudent.roomNumber.trim(),
       block: editingStudent.block,
       year: Number(editingStudent.year),
@@ -84,17 +90,16 @@ export const StudentManager: React.FC = () => {
       password: editingStudent.password.trim()
     });
 
-    reloadData();
-    setSuccessMsg(`✅ Saved: Roll No: ${editingStudent.rollNo} | Password: ${editingStudent.password}`);
+    setSuccessMsg(`✅ Cloud Update Saved: Roll No: ${editingStudent.rollNo}`);
     setEditingStudent(null);
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
   const filtered = students.filter(
     (s) =>
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.rollNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.roomNumber.toLowerCase().includes(searchQuery.toLowerCase())
+      s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.rollNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.roomNumber?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -103,16 +108,17 @@ export const StudentManager: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
             <DoorOpen className="w-5 h-5 text-indigo-400" />
-            <span>Hostel Student Records & Room Allocation Manager</span>
+            <span>Hostel Student Records (Google Cloud Synced)</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Total Students in Database: <span className="text-indigo-400 font-bold">{students.length}</span>
+          <p className="text-xs text-slate-400 mt-1 flex items-center gap-2">
+            Total Students in Cloud DB: <span className="text-emerald-400 font-bold">{students.length}</span>
+            {loading && <span className="text-amber-400 flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin" /> Syncing...</span>}
           </p>
         </div>
 
         <button
           onClick={() => { setShowAddForm(!showAddForm); setEditingStudent(null); }}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2"
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg"
         >
           <UserPlus className="w-4 h-4" />
           <span>{showAddForm ? 'Cancel' : 'Register New Student'}</span>
@@ -233,7 +239,7 @@ export const StudentManager: React.FC = () => {
                 type="submit"
                 className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-bold text-white shadow-lg"
               >
-                Save Changes to Database
+                Save Changes to Cloud DB
               </button>
             </div>
           </form>
@@ -243,7 +249,7 @@ export const StudentManager: React.FC = () => {
       {/* ➕ ADD FORM */}
       {showAddForm && (
         <form onSubmit={handleAddStudent} className="mb-6 p-4 bg-slate-950 border border-indigo-500/40 rounded-2xl space-y-3">
-          <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">New Student Admission Form</h3>
+          <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">New Student Admission Form (Cloud Saved)</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             <input
               type="text"
@@ -258,7 +264,7 @@ export const StudentManager: React.FC = () => {
               placeholder="Roll Number (Login ID)"
               value={rollNo}
               onChange={(e) => setRollNo(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white"
+              className="bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
               required
             />
             <input
@@ -307,8 +313,8 @@ export const StudentManager: React.FC = () => {
               />
             </div>
           </div>
-          <button type="submit" className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-xs mt-2 text-white">
-            Save Student & Password
+          <button type="submit" className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-xs mt-2 text-white shadow-lg">
+            Save Student to Cloud Database
           </button>
         </form>
       )}
@@ -317,7 +323,7 @@ export const StudentManager: React.FC = () => {
       <div className="relative mb-4">
         <input
           type="text"
-          placeholder="Search student..."
+          placeholder="Search student by name, roll no, room..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white"
@@ -341,7 +347,7 @@ export const StudentManager: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-slate-800/60">
             {filtered.map((std) => (
-              <tr key={std.studentId} className="hover:bg-slate-950/50">
+              <tr key={std.studentId || std.rollNo} className="hover:bg-slate-950/50">
                 <td className="py-3 px-3 font-mono font-bold text-indigo-400">{std.rollNo}</td>
                 <td className="py-3 px-3 font-semibold text-white">{std.name}</td>
                 <td className="py-3 px-3 text-amber-400 font-bold">{std.roomNumber} ({std.block})</td>
@@ -368,6 +374,13 @@ export const StudentManager: React.FC = () => {
                 </td>
               </tr>
             ))}
+            {filtered.length === 0 && !loading && (
+              <tr>
+                <td colSpan={7} className="py-8 text-center text-slate-500 text-xs">
+                  Koi student nahi mila. Naya student add karein.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
