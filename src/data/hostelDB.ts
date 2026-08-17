@@ -24,7 +24,7 @@ export interface StudentRecord {
 
 const COLLECTION_NAME = 'students';
 
-const DEFAULT_STUDENTS: StudentRecord[] = [
+const INITIAL_STUDENTS: StudentRecord[] = [
   {
     studentId: 'std-101',
     name: 'Aayush Singh',
@@ -35,94 +35,111 @@ const DEFAULT_STUDENTS: StudentRecord[] = [
     password: 'student@123',
     parentPhone: '+91 98123 45678',
     registeredAt: '2026-08-01'
+  },
+  {
+    studentId: 'std-102',
+    name: 'om singh',
+    rollNo: '2504221530041',
+    roomNumber: 'Tilak-200',
+    block: 'Tilak',
+    year: 2,
+    password: 'om@123',
+    parentPhone: '3434343434',
+    registeredAt: '2026-08-01'
   }
 ];
 
 export const hostelDB = {
-  // 🟢 1. Saare Students Cloud Se Fetch Karna
+  // 🟢 1. Cloud se Students lena
   getAllStudents: async (): Promise<StudentRecord[]> => {
     try {
       const colRef = collection(db, COLLECTION_NAME);
       const snapshot = await getDocs(colRef);
+      
       if (snapshot.empty) {
-        // Agar database khali ho toh default student daal do
-        for (const std of DEFAULT_STUDENTS) {
-          await hostelDB.addStudent(std);
+        for (const s of INITIAL_STUDENTS) {
+          await hostelDB.addStudent(s);
         }
-        return DEFAULT_STUDENTS;
+        return INITIAL_STUDENTS;
       }
+
       const list: StudentRecord[] = [];
       snapshot.forEach((docSnap) => {
-        list.push(docSnap.data() as StudentRecord);
+        list.push({ ...docSnap.data(), studentId: docSnap.id } as StudentRecord);
       });
       return list;
     } catch (e) {
-      console.error('Error fetching students from Firestore:', e);
-      return DEFAULT_STUDENTS;
+      console.error('Firestore Error:', e);
+      return INITIAL_STUDENTS;
     }
   },
 
-  // 🟢 2. Real-time Live Listener (Laptop aur Mobile dono me automatic refresh)
+  // 🟢 2. Live Sync
   subscribeToStudents: (callback: (students: StudentRecord[]) => void) => {
     const colRef = collection(db, COLLECTION_NAME);
+
     return onSnapshot(
       colRef,
       (snapshot) => {
+        if (snapshot.empty) {
+          INITIAL_STUDENTS.forEach((s) => hostelDB.addStudent(s));
+          callback(INITIAL_STUDENTS);
+          return;
+        }
+
         const list: StudentRecord[] = [];
         snapshot.forEach((docSnap) => {
-          list.push(docSnap.data() as StudentRecord);
+          list.push({ ...docSnap.data(), studentId: docSnap.id } as StudentRecord);
         });
-        callback(list.length > 0 ? list : DEFAULT_STUDENTS);
+        callback(list);
       },
       (error) => {
-        console.error('Firestore listener error:', error);
+        console.error('Listener Error:', error);
       }
     );
   },
 
-  // 🟢 3. Naya Student Global Cloud Par Add Karna
+  // 🟢 3. Add Student
   addStudent: async (newStudent: StudentRecord): Promise<void> => {
+    const docId = newStudent.studentId || `std_${newStudent.rollNo.trim().toUpperCase()}`;
     const cleanRoll = newStudent.rollNo.trim().toUpperCase();
-    const docRef = doc(db, COLLECTION_NAME, cleanRoll);
-    await setDoc(
-      docRef,
-      {
-        ...newStudent,
-        rollNo: cleanRoll
-      },
-      { merge: true }
-    );
+    const docRef = doc(db, COLLECTION_NAME, docId);
+    
+    await setDoc(docRef, {
+      ...newStudent,
+      studentId: docId,
+      rollNo: cleanRoll
+    }, { merge: true });
   },
 
-  // 🟢 4. Student Update Karna (Cloud Database)
+  // 🟢 4. FIXED UPDATE: Purana ID use karke sirf usi ko update karega
   updateStudent: async (studentId: string, updatedFields: Partial<StudentRecord>): Promise<void> => {
-    const roll = (updatedFields.rollNo || studentId).trim().toUpperCase();
-    const docRef = doc(db, COLLECTION_NAME, roll);
-    await setDoc(docRef, { ...updatedFields, studentId }, { merge: true });
+    const docRef = doc(db, COLLECTION_NAME, studentId);
+    const cleanRoll = updatedFields.rollNo ? updatedFields.rollNo.trim().toUpperCase() : undefined;
+    
+    await setDoc(docRef, {
+      ...updatedFields,
+      ...(cleanRoll ? { rollNo: cleanRoll } : {}),
+      studentId
+    }, { merge: true });
   },
 
-  // 🟢 5. Student Delete Karna (Cloud Database)
-  deleteStudent: async (rollNoOrId: string): Promise<void> => {
-    const cleanKey = rollNoOrId.trim().toUpperCase();
-    const docRef = doc(db, COLLECTION_NAME, cleanKey);
+  // 🟢 5. Delete Student
+  deleteStudent: async (studentId: string): Promise<void> => {
+    const docRef = doc(db, COLLECTION_NAME, studentId);
     await deleteDoc(docRef);
   },
 
-  // 🟢 6. Real Global Cloud Login Authentication
+  // 🟢 6. Login Authenticate
   authenticateStudent: async (rollNo: string, pass: string): Promise<StudentRecord | null> => {
-    try {
-      const list = await hostelDB.getAllStudents();
-      const inputRoll = rollNo.trim().toUpperCase();
-      const inputPass = pass.trim();
+    const list = await hostelDB.getAllStudents();
+    const inputRoll = rollNo.trim().toUpperCase();
+    const inputPass = pass.trim();
 
-      const matched = list.find(
-        (s) => s.rollNo.trim().toUpperCase() === inputRoll && s.password.trim() === inputPass
-      );
-      return matched || null;
-    } catch (err) {
-      console.error('Authentication error:', err);
-      return null;
-    }
+    const matched = list.find(
+      (s) => s.rollNo.trim().toUpperCase() === inputRoll && s.password.trim() === inputPass
+    );
+    return matched || null;
   },
 
   verifyWardenPassword: (password: string): boolean => {

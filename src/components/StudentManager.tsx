@@ -19,8 +19,9 @@ export const StudentManager: React.FC = () => {
   const [password, setPassword] = useState('');
   const [parentPhone, setParentPhone] = useState('');
 
-  // Edit State
+  // Edit State & Original Roll Store (To prevent duplicates)
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
+  const [originalRollNo, setOriginalRollNo] = useState<string>('');
 
   // 🟢 Realtime Cloud Listener (Laptop aur Mobile dono me automatic update)
   useEffect(() => {
@@ -36,8 +37,9 @@ export const StudentManager: React.FC = () => {
   // Delete from Cloud
   const handleDeleteStudent = async (student: StudentRecord) => {
     if (window.confirm(`Kya aap ${student.name} (${student.rollNo}) ko database se remove karna chahte hain?`)) {
-      await hostelDB.deleteStudent(student.rollNo || student.studentId);
-      setSuccessMsg(`Student ${student.name} deleted globally.`);
+      const idToDelete = student.studentId || student.rollNo;
+      await hostelDB.deleteStudent(idToDelete);
+      setSuccessMsg(`Student ${student.name} deleted successfully.`);
       setTimeout(() => setSuccessMsg(''), 3000);
     }
   };
@@ -50,10 +52,11 @@ export const StudentManager: React.FC = () => {
       return;
     }
 
+    const cleanRoll = rollNo.trim().toUpperCase();
     const newStd: StudentRecord = {
-      studentId: `std-${Date.now()}`,
+      studentId: cleanRoll,
       name: name.trim(),
-      rollNo: rollNo.trim().toUpperCase(),
+      rollNo: cleanRoll,
       roomNumber: roomNumber.trim(),
       block,
       year: Number(year),
@@ -75,23 +78,37 @@ export const StudentManager: React.FC = () => {
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  // Save Edit to Cloud
+  // 🟢 FIXED: Save Edit Without Creating Duplicates
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent) return;
 
-    await hostelDB.updateStudent(editingStudent.studentId, {
+    const newRoll = editingStudent.rollNo.trim().toUpperCase();
+    const oldRoll = originalRollNo.trim().toUpperCase();
+
+    // Agar Roll No change kiya hai toh purana wala delete karke naya save hoga
+    if (oldRoll && oldRoll !== newRoll) {
+      await hostelDB.deleteStudent(oldRoll);
+    }
+
+    const updatedData: StudentRecord = {
+      ...editingStudent,
+      studentId: newRoll,
       name: editingStudent.name.trim(),
-      rollNo: editingStudent.rollNo.trim().toUpperCase(),
+      rollNo: newRoll,
       roomNumber: editingStudent.roomNumber.trim(),
       block: editingStudent.block,
       year: Number(editingStudent.year),
       parentPhone: editingStudent.parentPhone.trim(),
-      password: editingStudent.password.trim()
-    });
+      password: editingStudent.password.trim(),
+      registeredAt: editingStudent.registeredAt || new Date().toISOString().split('T')[0]
+    };
 
-    setSuccessMsg(`✅ Cloud Update Saved: Roll No: ${editingStudent.rollNo}`);
+    await hostelDB.addStudent(updatedData);
+
+    setSuccessMsg(`✅ Student "${updatedData.name}" (${updatedData.rollNo}) successfully updated!`);
     setEditingStudent(null);
+    setOriginalRollNo('');
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
@@ -137,7 +154,7 @@ export const StudentManager: React.FC = () => {
         <div className="mb-6 p-5 bg-slate-950 border-2 border-indigo-500/60 rounded-2xl">
           <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
             <span className="text-indigo-300 font-bold text-xs uppercase">Edit Student: {editingStudent.name}</span>
-            <button onClick={() => setEditingStudent(null)} className="text-slate-400 hover:text-white">
+            <button onClick={() => { setEditingStudent(null); setOriginalRollNo(''); }} className="text-slate-400 hover:text-white">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -230,7 +247,7 @@ export const StudentManager: React.FC = () => {
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
               <button
                 type="button"
-                onClick={() => setEditingStudent(null)}
+                onClick={() => { setEditingStudent(null); setOriginalRollNo(''); }}
                 className="px-4 py-2 bg-slate-800 rounded-xl text-xs text-slate-300"
               >
                 Cancel
@@ -357,7 +374,11 @@ export const StudentManager: React.FC = () => {
                 <td className="py-3 px-3 text-right">
                   <div className="inline-flex items-center gap-1.5">
                     <button
-                      onClick={() => { setEditingStudent({ ...std }); setShowAddForm(false); }}
+                      onClick={() => { 
+                        setEditingStudent({ ...std }); 
+                        setOriginalRollNo(std.rollNo); 
+                        setShowAddForm(false); 
+                      }}
                       className="px-2.5 py-1.5 bg-indigo-500/10 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-lg text-[11px] font-bold"
                     >
                       <Edit3 className="w-3.5 h-3.5 inline mr-1" />
