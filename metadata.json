@@ -1,0 +1,6 @@
+{
+  "name": "Hostel Management System",
+  "description": "Comprehensive hostel app with Mess Menu, Tagore/Tilak/Subhash room occupancy tracker, Complaint logging with photo/video uploads, Biometric attendance logger, College bunk alerts, and Emergency notifications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
