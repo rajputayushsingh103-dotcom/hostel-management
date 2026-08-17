@@ -26,29 +26,22 @@ const INITIAL_STUDENTS: StudentRecord[] = [
     password: 'student@123',
     parentPhone: '+91 98123 45678',
     registeredAt: '2026-08-01'
-  },
-  {
-    studentId: 'std-102',
-    name: 'Rohan Verma',
-    rollNo: '2026CS102',
-    roomNumber: 'Tagore-102',
-    block: 'Tagore',
-    year: 1,
-    password: 'student@123',
-    parentPhone: '+91 98765 11111',
-    registeredAt: '2026-08-02'
   }
 ];
 
 export const hostelDB = {
-  // 1. Saare Students ki list lana
+  // 1. Saare Students fetch karna
   getAllStudents: (): StudentRecord[] => {
     const data = localStorage.getItem(STORAGE_KEY_STUDENTS);
     if (!data) {
       localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(INITIAL_STUDENTS));
       return INITIAL_STUDENTS;
     }
-    return JSON.parse(data);
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      return INITIAL_STUDENTS;
+    }
   },
 
   // 2. Naya Student Add karna
@@ -58,23 +51,39 @@ export const hostelDB = {
     localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(students));
   },
 
-  // 3. Student Delete / Remove karna
+  // 3. ✏️ Student Update karna (Roll No, Password, Room sabhi)
+  updateStudent: (studentId: string, updatedFields: Partial<StudentRecord>): void => {
+    const students = hostelDB.getAllStudents();
+    const updated = students.map((s) => {
+      if (s.studentId === studentId) {
+        return { ...s, ...updatedFields };
+      }
+      return s;
+    });
+    localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(updated));
+  },
+
+  // 4. Student Delete karna
   deleteStudent: (studentId: string): void => {
     const students = hostelDB.getAllStudents();
     const updatedStudents = students.filter((s) => s.studentId !== studentId);
     localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(updatedStudents));
   },
 
-  // 4. Student Login Auth
+  // 5. 🎯 Real Student Login Match (Roll Number + Password)
   authenticateStudent: (rollNo: string, password: string): StudentRecord | null => {
     const students = hostelDB.getAllStudents();
-    return students.find(
+    const cleanRoll = rollNo.trim().toLowerCase();
+    const cleanPass = password.trim();
+
+    const student = students.find(
       (s) =>
-        s.rollNo.trim().toLowerCase() === rollNo.trim().toLowerCase() &&
-        s.password.trim() === password.trim()
-    ) || null;
+        s.rollNo.trim().toLowerCase() === cleanRoll &&
+        s.password.trim() === cleanPass
+    );
+    return student || null;
   },
 
-  verifyWardenPassword: (password: string): boolean => password === 'warden@123' || password === 'warden123',
-  verifyAdminPassword: (password: string): boolean => password === 'admin@123' || password === 'admin123'
+  verifyWardenPassword: (password: string): boolean => password.trim() === 'warden@123' || password.trim() === 'warden123',
+  verifyAdminPassword: (password: string): boolean => password.trim() === 'admin@123' || password.trim() === 'admin123'
 };
