@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { hostelDB, StudentRecord } from '../data/hostelDB';
-import { UserMinus, UserPlus, Search, CheckCircle, DoorOpen, Edit3, X, RefreshCw } from 'lucide-react';
+import { UserMinus, UserPlus, Search, CheckCircle, DoorOpen, Edit3, X } from 'lucide-react';
 import { BlockName } from '../types';
 
 export const StudentManager: React.FC = () => {
@@ -19,11 +19,11 @@ export const StudentManager: React.FC = () => {
   const [password, setPassword] = useState('');
   const [parentPhone, setParentPhone] = useState('');
 
-  // Edit State & Original Roll Store (To prevent duplicates)
+  // Edit State & Original Roll Store
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
   const [originalRollNo, setOriginalRollNo] = useState<string>('');
 
-  // 🟢 Realtime Cloud Listener (Laptop aur Mobile dono me automatic update)
+  // Live Realtime listener
   useEffect(() => {
     setLoading(true);
     const unsubscribe = hostelDB.subscribeToStudents((cloudStudents) => {
@@ -34,7 +34,7 @@ export const StudentManager: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Delete from Cloud
+  // Delete
   const handleDeleteStudent = async (student: StudentRecord) => {
     if (window.confirm(`Kya aap ${student.name} (${student.rollNo}) ko database se remove karna chahte hain?`)) {
       const idToDelete = student.studentId || student.rollNo;
@@ -44,7 +44,7 @@ export const StudentManager: React.FC = () => {
     }
   };
 
-  // Add to Cloud
+  // Add
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password.trim()) {
@@ -74,11 +74,11 @@ export const StudentManager: React.FC = () => {
     setPassword('');
     setParentPhone('');
 
-    setSuccessMsg(`✅ Student ${newStd.name} (Roll: ${newStd.rollNo}) Cloud Database me save ho gaya!`);
+    setSuccessMsg(`✅ Student ${newStd.name} (Roll: ${newStd.rollNo}) saved!`);
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  // 🟢 FIXED: Save Edit Without Creating Duplicates
+  // Save Edit
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent) return;
@@ -86,7 +86,6 @@ export const StudentManager: React.FC = () => {
     const newRoll = editingStudent.rollNo.trim().toUpperCase();
     const oldRoll = originalRollNo.trim().toUpperCase();
 
-    // Agar Roll No change kiya hai toh purana wala delete karke naya save hoga
     if (oldRoll && oldRoll !== newRoll) {
       await hostelDB.deleteStudent(oldRoll);
     }
@@ -125,12 +124,8 @@ export const StudentManager: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
             <DoorOpen className="w-5 h-5 text-indigo-400" />
-            <span>Hostel Student Records (Google Cloud Synced)</span>
+            <span>Hostel Student Records & Room Allocation</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-1 flex items-center gap-2">
-            Total Students in Cloud DB: <span className="text-emerald-400 font-bold">{students.length}</span>
-            {loading && <span className="text-amber-400 flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin" /> Syncing...</span>}
-          </p>
         </div>
 
         <button
@@ -256,7 +251,7 @@ export const StudentManager: React.FC = () => {
                 type="submit"
                 className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-bold text-white shadow-lg"
               >
-                Save Changes to Cloud DB
+                Save Changes
               </button>
             </div>
           </form>
@@ -266,7 +261,7 @@ export const StudentManager: React.FC = () => {
       {/* ➕ ADD FORM */}
       {showAddForm && (
         <form onSubmit={handleAddStudent} className="mb-6 p-4 bg-slate-950 border border-indigo-500/40 rounded-2xl space-y-3">
-          <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">New Student Admission Form (Cloud Saved)</h3>
+          <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">New Student Admission Form</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             <input
               type="text"
@@ -331,7 +326,7 @@ export const StudentManager: React.FC = () => {
             </div>
           </div>
           <button type="submit" className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-xs mt-2 text-white shadow-lg">
-            Save Student to Cloud Database
+            Save Student
           </button>
         </form>
       )}

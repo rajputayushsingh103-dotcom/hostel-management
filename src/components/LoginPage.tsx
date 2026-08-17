@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { hostelDB } from '../data/hostelDB';
 import {
   ShieldCheck,
@@ -8,7 +8,6 @@ import {
   LogIn,
   AlertCircle,
   School,
-  Database,
   RefreshCw
 } from 'lucide-react';
 import { UserAuthSession, Role } from '../types';
@@ -30,17 +29,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   
   const [errorMsg, setErrorMsg] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [liveStudentCount, setLiveStudentCount] = useState<number>(0);
 
-  // 🟢 Live Sync Counter with Google Cloud
-  useEffect(() => {
-    const unsubscribe = hostelDB.subscribeToStudents((students) => {
-      setLiveStudentCount(students.length);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // 1. 🟢 Student Cloud Login
+  // 1. Student Cloud Login
   const handleStudentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -53,7 +43,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     setIsAuthenticating(true);
 
     try {
-      // Direct Cloud DB Verification
       const student = await hostelDB.authenticateStudent(studentRoll, studentPassword);
 
       if (student) {
@@ -69,11 +58,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           parentPhone: student.parentPhone
         });
       } else {
-        setErrorMsg(`Galat Credentials! Roll: "${studentRoll}" aur Password cloud database me match nahi hua.`);
+        setErrorMsg(`Galat Credentials! Roll: "${studentRoll}" aur Password match nahi hua.`);
       }
     } catch (err) {
       console.error(err);
-      setErrorMsg('Cloud database se connect karne me problem hui. Internet check karein.');
+      setErrorMsg('Database se connect karne me problem hui. Internet check karein.');
     } finally {
       setIsAuthenticating(false);
     }
@@ -123,10 +112,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
           Hostel Hub Authentication
         </h1>
-        <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-400 font-mono mt-1">
-          <Database className="w-3.5 h-3.5" />
-          <span>Google Cloud Database Synced ({liveStudentCount} Enrolled Students)</span>
-        </div>
       </div>
 
       <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl z-10">
@@ -213,7 +198,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               {isAuthenticating ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Verifying from Cloud...</span>
+                  <span>Logging in...</span>
                 </>
               ) : (
                 <>
