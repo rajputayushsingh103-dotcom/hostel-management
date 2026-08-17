@@ -15,6 +15,7 @@ import { BunkAlertSection } from './components/BunkAlertSection';
 import { AlertsSection } from './components/AlertsSection';
 import { MediaModal } from './components/MediaModal';
 import { YearGroupsSection } from './components/YearGroupsSection';
+import { StudentManager } from './components/StudentManager'; // 👈 Student Manager Component
 import {
   INITIAL_MESS_MENU,
   INITIAL_ROOMS,
@@ -512,6 +513,11 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Tab 1: Student Admission Manager (Only for Warden & College Admin) */}
+        {activeTab === 'students' && (role === 'warden' || role === 'college_admin') && (
+          <StudentManager />
+        )}
+
         {activeTab === 'leave' && (
           <HomeLeaveSection
             leavePasses={leavePasses}
@@ -533,18 +539,26 @@ export default function App() {
           />
         )}
 
+        {/* Tab 3: Rooms Directory with Student Admission Manager on Top */}
         {activeTab === 'rooms' && (
-          <RoomOccupancySection
-            rooms={rooms}
-            onAddRoom={handleAddRoom}
-            onAddOccupant={handleAddOccupant}
-            onUpdateRoom={handleUpdateRoom}
-            onUpdateOccupant={handleUpdateOccupant}
-            onRemoveOccupant={handleRemoveOccupant}
-            role={role}
-            isRoomDirectoryVisibleToStudents={isRoomDirectoryVisibleToStudents}
-            onToggleRoomDirectoryVisibility={() => setIsRoomDirectoryVisibleToStudents(!isRoomDirectoryVisibleToStudents)}
-          />
+          <div className="space-y-8">
+            {/* Warden & Admin ke liye Rooms page par Student Manager */}
+            {(role === 'warden' || role === 'college_admin') && (
+              <StudentManager />
+            )}
+
+            <RoomOccupancySection
+              rooms={rooms}
+              onAddRoom={handleAddRoom}
+              onAddOccupant={handleAddOccupant}
+              onUpdateRoom={handleUpdateRoom}
+              onUpdateOccupant={handleUpdateOccupant}
+              onRemoveOccupant={handleRemoveOccupant}
+              role={role}
+              isRoomDirectoryVisibleToStudents={isRoomDirectoryVisibleToStudents}
+              onToggleRoomDirectoryVisibility={() => setIsRoomDirectoryVisibleToStudents(!isRoomDirectoryVisibleToStudents)}
+            />
+          </div>
         )}
 
         {activeTab === 'complaints' && (
