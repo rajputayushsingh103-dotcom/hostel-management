@@ -5,10 +5,10 @@ import {
   User,
   Building2,
   Lock,
-  KeyRound,
   LogIn,
   AlertCircle,
-  School
+  School,
+  Database
 } from 'lucide-react';
 import { UserAuthSession, Role } from '../types';
 
@@ -23,23 +23,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [studentRoll, setStudentRoll] = useState('');
   const [studentPassword, setStudentPassword] = useState('');
   
-  // Warden & Admin Passwords State
+  // Warden & Admin Passwords
   const [wardenPassword, setWardenPassword] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   
-  // Error Message State
   const [errorMsg, setErrorMsg] = useState('');
 
-  // 1. Real Student Login Handler
+  // Live count of students currently in database
+  const liveStudentCount = hostelDB.getAllStudents().length;
+
+  // 1. Student Login
   const handleStudentLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
     if (!studentRoll.trim() || !studentPassword.trim()) {
-      setErrorMsg('Please enter both Roll Number and Password.');
+      setErrorMsg('Roll Number aur Password dono enter karein.');
       return;
     }
 
+    // Direct DB Check
     const student = hostelDB.authenticateStudent(studentRoll, studentPassword);
 
     if (student) {
@@ -55,11 +58,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         parentPhone: student.parentPhone
       });
     } else {
-      setErrorMsg('Invalid Credentials: Roll Number ya Password galat hai!');
+      setErrorMsg(`Galat Credentials! Roll: "${studentRoll}" aur Password database me match nahi hua.`);
     }
   };
 
-  // 2. Real Warden Login Handler
+  // 2. Warden Login
   const handleWardenLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -75,7 +78,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     }
   };
 
-  // 3. Real Administration Login Handler
+  // 3. Admin Login
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -93,10 +96,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 relative overflow-hidden">
-      {/* Background Glow */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-indigo-600/10 blur-[120px] rounded-full pointer-events-none" />
 
-      {/* Header */}
       <div className="max-w-md w-full text-center mb-6 z-10">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold mb-3">
           <Building2 className="w-4 h-4 text-indigo-400" />
@@ -105,14 +106,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
           Hostel Hub Authentication
         </h1>
-        <p className="text-xs sm:text-sm text-slate-400 mt-1">
-          Secure Portal for Students, Wardens & College Administration
-        </p>
+        <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-400 font-mono mt-1">
+          <Database className="w-3.5 h-3.5" />
+          <span>Live Database Synced ({liveStudentCount} Enrolled Students)</span>
+        </div>
       </div>
 
-      {/* Main Form Card */}
       <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl z-10">
-        {/* Role Selector Tabs */}
         <div className="grid grid-cols-3 p-1 bg-slate-950 rounded-2xl border border-slate-800 mb-6 text-xs">
           <button
             type="button"
@@ -148,7 +148,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </button>
         </div>
 
-        {/* Error Notification */}
         {errorMsg && (
           <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
@@ -156,20 +155,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </div>
         )}
 
-        {/* 1. STUDENT LOGIN FORM */}
+        {/* 1. STUDENT LOGIN */}
         {activeMode === 'student' && (
           <form onSubmit={handleStudentLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Student Roll Number:
-              </label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Student Roll Number:</label>
               <div className="relative">
                 <input
                   type="text"
                   value={studentRoll}
                   onChange={(e) => setStudentRoll(e.target.value)}
                   placeholder="Enter Roll Number"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus:border-indigo-500"
                   required
                 />
                 <User className="absolute right-3 top-2.5 w-4 h-4 text-slate-500" />
@@ -177,16 +174,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Password:
-              </label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Student Password:</label>
               <div className="relative">
                 <input
                   type="password"
                   value={studentPassword}
                   onChange={(e) => setStudentPassword(e.target.value)}
-                  placeholder="Enter your student password"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                  placeholder="Enter Password"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus:border-indigo-500"
                   required
                 />
                 <Lock className="absolute right-3 top-2.5 w-4 h-4 text-slate-500" />
@@ -195,7 +190,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
             <button
               type="submit"
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2"
             >
               <LogIn className="w-4 h-4" />
               <span>Login to Student Portal</span>
@@ -203,29 +198,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </form>
         )}
 
-        {/* 2. WARDEN LOGIN FORM */}
+        {/* 2. WARDEN LOGIN */}
         {activeMode === 'warden' && (
           <form onSubmit={handleWardenLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Warden Master Password:
-              </label>
-              <div className="relative">
-                <input
-                  type="password"
-                  value={wardenPassword}
-                  onChange={(e) => setWardenPassword(e.target.value)}
-                  placeholder="Enter Warden Password"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-red-500 transition-colors"
-                  required
-                />
-                <KeyRound className="absolute right-3 top-2.5 w-4 h-4 text-slate-500" />
-              </div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Warden Master Password:</label>
+              <input
+                type="password"
+                value={wardenPassword}
+                onChange={(e) => setWardenPassword(e.target.value)}
+                placeholder="Enter Warden Password"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus:border-red-500"
+                required
+              />
             </div>
-
             <button
               type="submit"
-              className="w-full py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-red-600/30 transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-red-600/30 flex items-center justify-center gap-2"
             >
               <ShieldCheck className="w-4 h-4" />
               <span>Login as Warden</span>
@@ -233,39 +222,29 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </form>
         )}
 
-        {/* 3. ADMINISTRATION LOGIN FORM */}
+        {/* 3. ADMIN LOGIN */}
         {activeMode === 'college_admin' && (
           <form onSubmit={handleAdminLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Administration Master Password:
-              </label>
-              <div className="relative">
-                <input
-                  type="password"
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder="Enter Admin Password"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-amber-500 transition-colors"
-                  required
-                />
-                <Lock className="absolute right-3 top-2.5 w-4 h-4 text-slate-500" />
-              </div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Administration Master Password:</label>
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="Enter Admin Password"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus:border-amber-500"
+                required
+              />
             </div>
-
             <button
               type="submit"
-              className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-amber-600/30 transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-amber-600/30 flex items-center justify-center gap-2"
             >
               <School className="w-4 h-4" />
               <span>Login as Administration</span>
             </button>
           </form>
         )}
-      </div>
-
-      <div className="mt-6 text-center text-slate-500 text-xs">
-        © 2026 Hostel Management System • Real Authentication
       </div>
     </div>
   );

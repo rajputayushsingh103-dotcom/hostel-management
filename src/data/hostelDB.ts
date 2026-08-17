@@ -13,9 +13,9 @@ export interface StudentRecord {
   registeredAt: string;
 }
 
-const STORAGE_KEY = 'hostel_master_students_v3';
+const MASTER_DB_KEY = 'HOSTEL_CENTRAL_STUDENT_DATABASE_V1';
 
-const DEFAULT_DATA: StudentRecord[] = [
+const DEFAULT_STUDENTS: StudentRecord[] = [
   {
     studentId: 'std-101',
     name: 'Aayush Singh',
@@ -30,55 +30,53 @@ const DEFAULT_DATA: StudentRecord[] = [
 ];
 
 export const hostelDB = {
-  // Direct Live Read
+  // 1. Saare Students Lena (Direct LocalStorage)
   getAllStudents: (): StudentRecord[] => {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
+      const data = localStorage.getItem(MASTER_DB_KEY);
       if (!data) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_DATA));
-        return DEFAULT_DATA;
+        localStorage.setItem(MASTER_DB_KEY, JSON.stringify(DEFAULT_STUDENTS));
+        return DEFAULT_STUDENTS;
       }
       return JSON.parse(data);
     } catch (e) {
-      return DEFAULT_DATA;
+      return DEFAULT_STUDENTS;
     }
   },
 
-  // Add Student
+  // 2. Naya Student Add Karna
   addStudent: (newStudent: StudentRecord): void => {
-    const students = hostelDB.getAllStudents();
-    students.push(newStudent);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(students));
+    const list = hostelDB.getAllStudents();
+    list.push(newStudent);
+    localStorage.setItem(MASTER_DB_KEY, JSON.stringify(list));
   },
 
-  // Update Student
+  // 3. Student Update Karna
   updateStudent: (studentId: string, updatedFields: Partial<StudentRecord>): void => {
-    const students = hostelDB.getAllStudents();
-    const updated = students.map((s) => {
+    const list = hostelDB.getAllStudents();
+    const updated = list.map((s) => {
       if (s.studentId === studentId) {
         return { ...s, ...updatedFields };
       }
       return s;
     });
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    localStorage.setItem(MASTER_DB_KEY, JSON.stringify(updated));
   },
 
-  // Delete Student
+  // 4. Student Delete Karna
   deleteStudent: (studentId: string): void => {
-    const students = hostelDB.getAllStudents();
-    const updated = students.filter((s) => s.studentId !== studentId);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    const list = hostelDB.getAllStudents();
+    const updated = list.filter((s) => s.studentId !== studentId);
+    localStorage.setItem(MASTER_DB_KEY, JSON.stringify(updated));
   },
 
-  // 🎯 Live Direct Login Check
-  authenticateStudent: (rollNo: string, password: string): StudentRecord | null => {
-    const data = localStorage.getItem(STORAGE_KEY);
-    const students: StudentRecord[] = data ? JSON.parse(data) : DEFAULT_DATA;
-    
+  // 5. 🎯 Real Login Authentication
+  authenticateStudent: (rollNo: string, pass: string): StudentRecord | null => {
+    const list = hostelDB.getAllStudents();
     const inputRoll = rollNo.trim().toLowerCase();
-    const inputPass = password.trim();
+    const inputPass = pass.trim();
 
-    const matched = students.find(
+    const matched = list.find(
       (s) => s.rollNo.trim().toLowerCase() === inputRoll && s.password.trim() === inputPass
     );
     return matched || null;

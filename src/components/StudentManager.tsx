@@ -1,4 +1,3 @@
-// src/components/StudentManager.tsx
 import React, { useState } from 'react';
 import { hostelDB, StudentRecord } from '../data/hostelDB';
 import { UserMinus, UserPlus, Search, CheckCircle, Phone, DoorOpen, Edit3, X, Save, Lock, Building2, Calendar, Hash } from 'lucide-react';
@@ -22,16 +21,16 @@ export const StudentManager: React.FC = () => {
   // Edit State
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
 
-  const refreshList = () => {
+  const reloadData = () => {
     setStudents(hostelDB.getAllStudents());
   };
 
   // Delete
   const handleDeleteStudent = (student: StudentRecord) => {
-    if (window.confirm(`Kya aap ${student.name} (${student.rollNo}) ko remove karna chahte hain?`)) {
+    if (window.confirm(`Kya aap ${student.name} (${student.rollNo}) ko database se remove karna chahte hain?`)) {
       hostelDB.deleteStudent(student.studentId);
-      refreshList();
-      setSuccessMsg(`Student ${student.name} remove ho gaya.`);
+      reloadData();
+      setSuccessMsg(`Student ${student.name} deleted.`);
       setTimeout(() => setSuccessMsg(''), 3000);
     }
   };
@@ -57,7 +56,7 @@ export const StudentManager: React.FC = () => {
     };
 
     hostelDB.addStudent(newStd);
-    refreshList();
+    reloadData();
     setShowAddForm(false);
 
     setName('');
@@ -66,7 +65,7 @@ export const StudentManager: React.FC = () => {
     setPassword('');
     setParentPhone('');
 
-    setSuccessMsg(`✅ Student ${newStd.name} add ho gaya! (Roll: ${newStd.rollNo} | Pass: ${newStd.password})`);
+    setSuccessMsg(`✅ Student ${newStd.name} (Roll: ${newStd.rollNo}) saved!`);
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
@@ -85,8 +84,8 @@ export const StudentManager: React.FC = () => {
       password: editingStudent.password.trim()
     });
 
-    refreshList();
-    setSuccessMsg(`✅ Saved: Naya Roll: ${editingStudent.rollNo} | Naya Pass: ${editingStudent.password}`);
+    reloadData();
+    setSuccessMsg(`✅ Saved: Roll No: ${editingStudent.rollNo} | Password: ${editingStudent.password}`);
     setEditingStudent(null);
     setTimeout(() => setSuccessMsg(''), 4000);
   };
@@ -140,7 +139,7 @@ export const StudentManager: React.FC = () => {
           <form onSubmit={handleSaveEdit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div>
-                <label className="block text-slate-300 mb-1">Full Name:</label>
+                <label className="block text-slate-300 mb-1">Student Full Name:</label>
                 <input
                   type="text"
                   value={editingStudent.name}
