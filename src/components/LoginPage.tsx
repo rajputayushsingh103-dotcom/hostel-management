@@ -71,7 +71,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         block: 'Tagore'
       });
     } else {
-      setErrorMsg('Incorrect Warden Password! (Default: warden@123)');
+      setErrorMsg('Incorrect Warden Password!');
     }
   };
 
@@ -87,7 +87,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         block: 'Tagore'
       });
     } else {
-      setErrorMsg('Incorrect Administration Master Password! (Default: admin@123)');
+      setErrorMsg('Incorrect Administration Master Password!');
     }
   };
 
@@ -168,7 +168,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   type="text"
                   value={studentRoll}
                   onChange={(e) => setStudentRoll(e.target.value)}
-                  placeholder="e.g. 2024CS101"
+                  placeholder="Enter Roll Number"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-indigo-500 transition-colors"
                   required
                 />
@@ -191,10 +191,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 />
                 <Lock className="absolute right-3 top-2.5 w-4 h-4 text-slate-500" />
               </div>
-            </div>
-
-            <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl text-[11px] text-slate-400">
-              💡 Demo Student Login: Roll: <span className="text-indigo-400 font-bold">2024CS101</span> | Pass: <span className="text-indigo-400 font-bold">student@123</span>
             </div>
 
             <button
@@ -225,9 +221,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 />
                 <KeyRound className="absolute right-3 top-2.5 w-4 h-4 text-slate-500" />
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Password: <span className="text-red-400 font-mono font-bold">warden@123</span>
-              </p>
             </div>
 
             <button
@@ -258,9 +251,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 />
                 <Lock className="absolute right-3 top-2.5 w-4 h-4 text-slate-500" />
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Password: <span className="text-amber-400 font-mono font-bold">admin@123</span>
-              </p>
             </div>
 
             <button
