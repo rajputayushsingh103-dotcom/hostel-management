@@ -18,7 +18,8 @@ import {
   AlertCircle,
   Trash2,
   X,
-  Sparkles
+  Sparkles,
+  MapPin
 } from 'lucide-react';
 import { HomeLeavePass, LeaveStatus, PassCategory, Role, UserAuthSession, OutingRulesConfig, GymMemberRecord, BlockName } from '../types';
 
@@ -79,11 +80,16 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
     localStorage.setItem('hostel_gym_members', JSON.stringify(gymMembers));
   }, [gymMembers]);
 
+  // Form Fields
   const [passCategory, setPassCategory] = useState<PassCategory>('Local Outing');
   const [destination, setDestination] = useState('');
   const [departureDate, setDepartureDate] = useState('');
-  const [returnDate, setReturnDate] = useState('08:00 PM');
-  const [reason, setReason] = useState('');
+  
+  // 🟢 Home Leave Specific Dates & Calculated Day
+  const [homeReturnDate, setHomeReturnDate] = useState('');
+  const [homeReturnDay, setHomeReturnDay] = useState('');
+
+  const [reasonOrAddress, setReasonOrAddress] = useState('');
   const [parentPhone, setParentPhone] = useState(userSession.parentPhone || '+91 98123 45678');
   const [studentPhone, setStudentPhone] = useState('+91 98765 43210');
   const [filterStatus, setFilterStatus] = useState<string>('All');
@@ -96,7 +102,6 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   const studentYear = userSession.year || 1;
   const currentStudentRoll = (userSession.rollNo || '').trim().toUpperCase();
 
-  // Strict Gym Privacy
   const studentGymRecord = gymMembers.find((g) => g.rollNo.trim().toUpperCase() === currentStudentRoll);
   const isStudentGymMember = role === 'student' && !!studentGymRecord;
 
@@ -104,19 +109,38 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const todayDayName = dayNames[now.getDay()];
 
-  const getLiveTimeString = () => {
-    return new Date().toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
+  // Auto Live Date & Time Formatter (IST)
+  const getLiveDateAndTimeString = () => {
+    const d = new Date();
+    const datePart = d.toISOString().split('T')[0];
+    const timePart = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    return `${datePart} (${dayNames[d.getDay()]}) ${timePart}`;
   };
 
   useEffect(() => {
     if (showApplyModal) {
-      setDepartureDate(getLiveTimeString());
+      setDepartureDate(getLiveDateAndTimeString());
+      // Default return date after 2 days for home leave
+      const nextDate = new Date();
+      nextDate.setDate(nextDate.getDate() + 2);
+      const nextDateStr = nextDate.toISOString().split('T')[0];
+      setHomeReturnDate(nextDateStr);
+      setHomeReturnDay(dayNames[nextDate.getDay()]);
     }
   }, [showApplyModal]);
+
+  // Handle Return Date Change & Auto-Calculate Return Day
+  const handleReturnDateChange = (val: string) => {
+    setHomeReturnDate(val);
+    if (val) {
+      const selected = new Date(val);
+      if (!isNaN(selected.getTime())) {
+        setHomeReturnDay(dayNames[selected.getDay()]);
+      }
+    } else {
+      setHomeReturnDay('');
+    }
+  };
 
   const checkApplicationWindow = (category: PassCategory) => {
     if (category === 'Outstation Vacation') {
@@ -127,10 +151,10 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
     const currentMinute = now.getMinutes();
     const totalMinutes = currentHour * 60 + currentMinute;
 
-    const min430PM = 16 * 60 + 30; // 16:30
-    const max600PM = 18 * 60;      // 18:00
-    const min900AM = 9 * 60;       // 09:00
-    const max1200PM = 12 * 60;     // 12:00
+    const min430PM = 16 * 60 + 30;
+    const max600PM = 18 * 60;
+    const min900AM = 9 * 60;
+    const max1200PM = 12 * 60;
 
     if (todayDayName === 'Sunday') {
       const isMorningSlot = totalMinutes >= min900AM && totalMinutes <= max1200PM;
@@ -158,7 +182,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
     } else {
       return {
         isOpen: false,
-        message: `🔒 Application Window Closed: Weekday window is strictly 04:30 PM to 06:00 PM. Current: ${getLiveTimeString()}.`
+        message: `🔒 Application Window Closed: Weekday window is strictly 04:30 PM to 06:00 PM. Current Time: ${new Date().toLocaleTimeString()}.`
       };
     }
   };
@@ -212,10 +236,14 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
       return;
     }
 
-    if (!destination.trim() || !reason.trim() || !parentPhone.trim()) {
-      setFormError('Kripya saari details bharein.');
+    if (!destination.trim() || !reasonOrAddress.trim() || !parentPhone.trim()) {
+      setFormError(passCategory === 'Outstation Vacation' ? 'Kripya apna Address Without College dalein!' : 'Kripya saari details bharein.');
       return;
     }
+
+    const calculatedReturnStr = passCategory === 'Outstation Vacation'
+      ? `${homeReturnDate} (${homeReturnDay}) 08:00 PM`
+      : 'Today 08:00 PM';
 
     onApplyLeavePass({
       studentId: userSession.studentId || 'std-101',
@@ -226,9 +254,9 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
       studentPhone: studentPhone,
       parentPhone: parentPhone,
       destination: destination,
-      departureDate: getLiveTimeString(),
-      expectedReturnDate: returnDate,
-      reason: reason,
+      departureDate: getLiveDateAndTimeString(),
+      expectedReturnDate: calculatedReturnStr,
+      reason: passCategory === 'Outstation Vacation' ? `Address: ${reasonOrAddress.trim()} (Return: ${homeReturnDay})` : reasonOrAddress.trim(),
       passCategory: passCategory,
       year: studentYear,
       isGymPass: false,
@@ -237,7 +265,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
 
     setShowApplyModal(false);
     setDestination('');
-    setReason('');
+    setReasonOrAddress('');
     setFormError('');
   };
 
@@ -303,6 +331,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Header Banner */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div>
@@ -351,7 +380,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all"
               >
                 <Plus className="w-4 h-4" />
-                <span>Apply Outing Pass</span>
+                <span>Apply Gate Pass</span>
               </button>
             )}
           </div>
@@ -409,7 +438,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
         </div>
       )}
 
-      {/* Normal Passes */}
+      {/* Passes List */}
       <div className="space-y-4">
         {filteredPasses.length === 0 ? (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
@@ -439,10 +468,12 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                   </h3>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300">
-                    <div><strong>Destination:</strong> {pass.destination}</div>
-                    <div><strong>Departure / Shift:</strong> <span className="font-mono text-emerald-400">{pass.departureDate}</span></div>
+                    <div><strong>Destination / City:</strong> {pass.destination}</div>
+                    <div><strong>Departure (Auto IST):</strong> <span className="font-mono text-emerald-400">{pass.departureDate}</span></div>
                     <div><strong>Return Cutoff:</strong> <span className="font-mono text-rose-400">{pass.expectedReturnDate}</span></div>
-                    <div><strong>Reason:</strong> {pass.reason}</div>
+                    <div className="sm:col-span-2 bg-slate-950 p-2 rounded-lg border border-slate-800">
+                      <strong>{pass.passCategory === 'Outstation Vacation' ? 'Address Without College:' : 'Reason:'}</strong> {pass.reason}
+                    </div>
                   </div>
                 </div>
 
@@ -617,6 +648,10 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 <span className="text-slate-400">Shift / Window:</span>
                 <span className="font-bold text-emerald-300 font-mono">{viewDigitalPass.departureDate} - {viewDigitalPass.expectedReturnDate}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Address / Reason:</span>
+                <span className="font-bold text-amber-300 text-right truncate max-w-[200px]">{viewDigitalPass.reason}</span>
+              </div>
             </div>
 
             <button
@@ -629,7 +664,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
         </div>
       )}
 
-      {/* APPLY PASS MODAL */}
+      {/* 🟢 APPLY PASS MODAL (AUTO FETCH DEPARTURE DATE & RETURN DATE + AUTO RETURN DAY) */}
       {showApplyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
@@ -702,53 +737,96 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Destination:</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  {passCategory === 'Outstation Vacation' ? 'Home Destination City / Village:' : 'Destination:'}
+                </label>
                 <input
                   type="text"
                   value={destination}
                   onChange={(e) => setDestination(e.target.value)}
-                  placeholder="e.g. City Market / Medical Store"
+                  placeholder={passCategory === 'Outstation Vacation' ? 'e.g. Lucknow / Varanasi / Gorakhpur' : 'e.g. City Market / Medical Store'}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white"
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-indigo-400 mb-1 flex items-center gap-1">
-                    <Lock className="w-3 h-3 text-indigo-400" />
-                    Departure Time (Live IST Auto):
-                  </label>
-                  <input
-                    type="text"
-                    value={departureDate || getLiveTimeString()}
-                    disabled
-                    className="w-full bg-slate-950/80 border border-indigo-500/40 rounded-xl px-3 py-2 text-xs text-emerald-400 font-mono font-bold cursor-not-allowed"
-                  />
-                </div>
+              {/* 🟢 DEPARTURE DATE (AUTO-FETCHED LIVE IST) */}
+              <div>
+                <label className="block text-xs font-semibold text-indigo-400 mb-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                  {passCategory === 'Outstation Vacation' ? 'Ghar Jane Ki Date (Auto IST Fetched):' : 'Departure Time (Live IST Auto):'}
+                </label>
+                <input
+                  type="text"
+                  value={departureDate || getLiveDateAndTimeString()}
+                  disabled
+                  className="w-full bg-slate-950/90 border border-indigo-500/40 rounded-xl px-3 py-2 text-xs text-emerald-400 font-mono font-bold cursor-not-allowed"
+                />
+              </div>
 
+              {/* 🟢 RETURN DATE & AUTOMATIC RETURN DAY FOR HOME LEAVE */}
+              {passCategory === 'Outstation Vacation' ? (
+                <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                  <div>
+                    <label className="block text-xs font-bold text-rose-400 mb-1">
+                      Wapas Aane Ki Date:
+                    </label>
+                    <input
+                      type="date"
+                      value={homeReturnDate}
+                      onChange={(e) => handleReturnDateChange(e.target.value)}
+                      className="w-full bg-slate-900 border border-rose-500/40 rounded-xl px-3 py-1.5 text-xs text-white font-mono"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-amber-300 mb-1">
+                      Wapas Aane Ka Din (Auto):
+                    </label>
+                    <input
+                      type="text"
+                      value={homeReturnDay ? `${homeReturnDay}` : 'Select Date'}
+                      disabled
+                      className="w-full bg-slate-900/80 border border-amber-500/40 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-bold cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+              ) : (
                 <div>
                   <label className="block text-xs font-semibold text-rose-400 mb-1 flex items-center gap-1">
                     <Clock className="w-3 h-3 text-rose-400" />
-                    Return Time (Max 08:00 PM):
+                    Return Time Limit:
                   </label>
                   <input
                     type="text"
-                    value={returnDate}
+                    value="Today strictly before 08:00 PM"
                     disabled
                     className="w-full bg-slate-950/80 border border-rose-500/40 rounded-xl px-3 py-2 text-xs text-rose-300 font-mono font-bold cursor-not-allowed"
                   />
                 </div>
-              </div>
+              )}
 
+              {/* MANDATORY ADDRESS WITHOUT COLLEGE */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Reason:</label>
+                <label className="block text-xs font-bold text-amber-300 mb-1 flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                  <span>
+                    {passCategory === 'Outstation Vacation' 
+                      ? 'Address Without College (घर/ठहरने का पूरा पता) *Mandatory:' 
+                      : 'Reason for Outing (कारण) *Mandatory:'}
+                  </span>
+                </label>
                 <textarea
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
+                  value={reasonOrAddress}
+                  onChange={(e) => setReasonOrAddress(e.target.value)}
                   rows={2}
-                  placeholder="e.g. Buying study materials..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white"
+                  placeholder={
+                    passCategory === 'Outstation Vacation'
+                      ? 'Enter complete permanent home address / stay location outside college (House No, Street, City, Pincode)...'
+                      : 'e.g. Buying study materials / urgent grocery...'
+                  }
+                  className="w-full bg-slate-950 border border-amber-500/50 rounded-xl px-3.5 py-2 text-xs text-white focus:border-amber-400"
                   required
                 />
               </div>
