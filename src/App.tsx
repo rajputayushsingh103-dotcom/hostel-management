@@ -15,7 +15,7 @@ import { BunkAlertSection } from './components/BunkAlertSection';
 import { AlertsSection } from './components/AlertsSection';
 import { MediaModal } from './components/MediaModal';
 import { YearGroupsSection } from './components/YearGroupsSection';
-import { StudentManager } from './components/StudentManager'; // 👈 Student Manager Component
+import { StudentManager } from './components/StudentManager';
 import {
   INITIAL_MESS_MENU,
   INITIAL_ROOMS,
@@ -108,7 +108,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : DEFAULT_OUTING_RULES;
   });
 
-  // Warden Control: Whether student role can view room directory
+  // Room Directory Visibility
   const [isRoomDirectoryVisibleToStudents, setIsRoomDirectoryVisibleToStudents] = useState<boolean>(() => {
     const saved = localStorage.getItem('hostel_room_directory_visible');
     return saved ? JSON.parse(saved) : false;
@@ -166,7 +166,6 @@ export default function App() {
     localStorage.setItem('hostel_outing_rules', JSON.stringify(outingRules));
   }, [outingRules]);
 
-  // If user is not logged in, display Login Screen
   if (!userSession) {
     return <LoginPage onLogin={(session) => setUserSession(session)} />;
   }
@@ -181,7 +180,6 @@ export default function App() {
   ).length;
   const activeLeavePassCount = leavePasses.filter((p) => p.status === 'Applied' || p.status === 'Departed').length;
 
-  // Handler Actions
   const handleLogout = () => {
     setUserSession(null);
   };
@@ -192,50 +190,29 @@ export default function App() {
     const now = new Date();
     const nowStr = `${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
-    const smsText = `ALERT: Dear Parent, your ward ${newPassData.studentName} (${newPassData.rollNo}, Room ${newPassData.roomNumber}) has submitted a Gate Pass for ${newPassData.destination} departing on ${newPassData.departureDate}. Return date: ${newPassData.expectedReturnDate}. Hostel Helpline: 0522-274001.`;
-
     const newPass: HomeLeavePass = {
       ...newPassData,
       id: `pass-${Date.now()}`,
       status: 'Applied',
-      parentSmsSent: true,
-      parentSmsTimestamp: nowStr,
-      parentSmsContent: smsText,
+      parentSmsSent: false,
       createdAt: nowStr
     };
 
     setLeavePasses([newPass, ...leavePasses]);
   };
 
-  const handleUpdateLeaveStatus = (id: string, status: LeaveStatus, resendSms: boolean = true) => {
-    const now = new Date();
-    const nowStr = `${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  const handleUpdateLeaveStatus = (id: string, status: LeaveStatus, resendSms: boolean = false) => {
+    if (role !== 'warden') return; // Only Warden can approve/reject
 
     setLeavePasses(
       leavePasses.map((p) => {
         if (p.id === id) {
-          let updatedSms = p.parentSmsContent;
-
-          if (resendSms || status === 'Approved' || status === 'Departed') {
-            if (status === 'Approved') {
-              updatedSms = `NOTICE: Dear Parent, Gate Pass for ${p.studentName} (${p.roomNumber}) departing for ${p.destination} on ${p.departureDate} has been APPROVED by Chief Warden.`;
-            } else if (status === 'Departed') {
-              updatedSms = `URGENT CHECKOUT ALERT: Dear Parent, your ward ${p.studentName} (${p.rollNo}) has CHECKED OUT and left the hostel grounds for ${p.destination} at ${nowStr}. If child does not arrive home, contact Warden: 0522-274001.`;
-            } else if (status === 'Returned') {
-              updatedSms = `ENTRY NOTICE: Dear Parent, ${p.studentName} (${p.roomNumber}) has safely checked back into hostel at ${nowStr}.`;
-            }
-          }
-
           const generatedToken = p.verificationToken || `WDN-SEAL-${Math.floor(1000 + Math.random() * 9000)}-AUTHENTICATED`;
-
           return {
             ...p,
             status,
-            parentSmsSent: true,
-            parentSmsTimestamp: nowStr,
-            parentSmsContent: updatedSms,
             verificationToken: status === 'Approved' || p.status === 'Approved' ? generatedToken : p.verificationToken,
-            wardenApprovedBy: role === 'warden' ? 'Chief Warden Office' : p.wardenApprovedBy
+            wardenApprovedBy: 'Chief Warden Office'
           };
         }
         return p;
@@ -267,10 +244,12 @@ export default function App() {
   };
 
   const handleUpdateMenu = (updatedMenu: DayMessMenu[]) => {
+    if (role !== 'warden') return;
     setMenuList(updatedMenu);
   };
 
   const handleUpdateRoom = (roomId: string, updatedFields: Partial<Room>) => {
+    if (role !== 'warden') return;
     setRooms(
       rooms.map((r) => {
         if (r.id === roomId) {
@@ -282,6 +261,7 @@ export default function App() {
   };
 
   const handleAddRoom = (newRoomData: Omit<Room, 'id' | 'occupants'>) => {
+    if (role !== 'warden') return;
     const newRoom: Room = {
       ...newRoomData,
       id: `${newRoomData.block.toLowerCase()}-${Date.now()}`,
@@ -290,11 +270,17 @@ export default function App() {
     setRooms([...rooms, newRoom]);
   };
 
+  const handleDeleteRoom = (roomId: string) => {
+    if (role !== 'warden') return;
+    setRooms(rooms.filter((r) => r.id !== roomId));
+  };
+
   const handleUpdateOccupant = (
     roomId: string,
     occupantId: string,
     updatedFields: Partial<RoomOccupant>
   ) => {
+    if (role !== 'warden') return;
     setRooms(
       rooms.map((r) => {
         if (r.id === roomId) {
@@ -314,6 +300,7 @@ export default function App() {
   };
 
   const handleRemoveOccupant = (roomId: string, occupantId: string) => {
+    if (role !== 'warden') return;
     setRooms(
       rooms.map((r) => {
         if (r.id === roomId) {
@@ -328,6 +315,7 @@ export default function App() {
   };
 
   const handleAddOccupant = (roomId: string, occupantData: Omit<RoomOccupant, 'id'>) => {
+    if (role !== 'warden') return;
     const newOccupant: RoomOccupant = {
       ...occupantData,
       id: `std-${Date.now()}`
@@ -374,6 +362,7 @@ export default function App() {
     remarks?: string,
     assignedTo?: string
   ) => {
+    if (role !== 'warden') return;
     setComplaints(
       complaints.map((c) => {
         if (c.id === id) {
@@ -391,6 +380,7 @@ export default function App() {
   };
 
   const handleToggleBiometricToday = (studentId: string) => {
+    if (role !== 'warden') return;
     setAttendanceSummaries(
       attendanceSummaries.map((s) => {
         if (s.studentId === studentId) {
@@ -417,6 +407,7 @@ export default function App() {
   };
 
   const handleExcuseMissedDate = (studentId: string, date: string) => {
+    if (role !== 'warden') return;
     setAttendanceSummaries(
       attendanceSummaries.map((s) => {
         if (s.studentId === studentId) {
@@ -433,6 +424,7 @@ export default function App() {
   };
 
   const handleAddAlert = (newAlertData: Omit<AlertNotice, 'id' | 'timestamp' | 'active'>) => {
+    if (role !== 'warden') return;
     const newAlert: AlertNotice = {
       ...newAlertData,
       id: `alt-${Date.now()}`,
@@ -449,6 +441,7 @@ export default function App() {
   };
 
   const handleToggleAlertStatus = (id: string) => {
+    if (role !== 'warden') return;
     setAlerts(
       alerts.map((a) => {
         if (a.id === id) {
@@ -460,13 +453,14 @@ export default function App() {
   };
 
   const handleSendYearGroupMessage = (yearGroup: 1 | 2 | 3 | 4, text: string) => {
+    if (role !== 'warden') return;
     const now = new Date();
     const timeStr = `${now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
     const newMsg: YearGroupMessage = {
       id: `msg-${Date.now()}`,
       yearGroup,
-      senderName: userSession.name,
+      senderName: 'Chief Warden Office',
       senderRole: role,
       message: text,
       timestamp: timeStr
@@ -475,6 +469,7 @@ export default function App() {
     setYearGroupMessages([newMsg, ...yearGroupMessages]);
   };
 
+  // 🟢 Automated Year-Wise Group Notice (No Parent SMS)
   const handleTriggerAutoGroupNotice = (studentName: string, rollNo: string, year: number) => {
     const now = new Date();
     const timeStr = `${now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -484,9 +479,9 @@ export default function App() {
     const autoMsg: YearGroupMessage = {
       id: `auto-${Date.now()}`,
       yearGroup: targetYear,
-      senderName: 'Hostel System Bot',
+      senderName: 'Hostel System Automation',
       senderRole: 'System Automation',
-      message: `🚨 MISSED BIOMETRIC ATTENDANCE NOTICE: ${studentName} (${rollNo}) missed the evening biometric punch-in cutoff time today. Warden & Parents notified.`,
+      message: `🚨 MISSED BIOMETRIC ATTENDANCE NOTICE: Student ${studentName} (${rollNo}) missed the evening biometric cutoff punch today. Please report to Warden Office.`,
       timestamp: timeStr,
       isAutomatedMissedNotice: true,
       flaggedStudentName: studentName,
@@ -498,7 +493,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
-      {/* Top Navigation Bar */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -511,9 +505,8 @@ export default function App() {
         activeLeavePassCount={activeLeavePassCount}
       />
 
-      {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Tab 1: Student Admission Manager (Only for Warden & College Admin) */}
+        {/* Tab 1: Student Manager (Only Warden can edit, Admin can view) */}
         {activeTab === 'students' && (role === 'warden' || role === 'college_admin') && (
           <StudentManager />
         )}
@@ -526,7 +519,9 @@ export default function App() {
             userSession={userSession}
             role={role}
             outingRules={outingRules}
-            onUpdateOutingRules={(newRules) => setOutingRules(newRules)}
+            onUpdateOutingRules={(newRules) => {
+              if (role === 'warden') setOutingRules(newRules);
+            }}
             onRecordGateScan={handleRecordGateScan}
           />
         )}
@@ -539,10 +534,8 @@ export default function App() {
           />
         )}
 
-        {/* Tab 3: Rooms Directory with Student Admission Manager on Top */}
         {activeTab === 'rooms' && (
           <div className="space-y-8">
-            {/* Warden & Admin ke liye Rooms page par Student Manager */}
             {(role === 'warden' || role === 'college_admin') && (
               <StudentManager />
             )}
@@ -550,13 +543,16 @@ export default function App() {
             <RoomOccupancySection
               rooms={rooms}
               onAddRoom={handleAddRoom}
+              onDeleteRoom={handleDeleteRoom}
               onAddOccupant={handleAddOccupant}
               onUpdateRoom={handleUpdateRoom}
               onUpdateOccupant={handleUpdateOccupant}
               onRemoveOccupant={handleRemoveOccupant}
               role={role}
               isRoomDirectoryVisibleToStudents={isRoomDirectoryVisibleToStudents}
-              onToggleRoomDirectoryVisibility={() => setIsRoomDirectoryVisibleToStudents(!isRoomDirectoryVisibleToStudents)}
+              onToggleRoomDirectoryVisibility={() => {
+                if (role === 'warden') setIsRoomDirectoryVisibleToStudents(!isRoomDirectoryVisibleToStudents);
+              }}
             />
           </div>
         )}
@@ -579,7 +575,9 @@ export default function App() {
             role={role}
             userSession={userSession}
             timingConfig={timingConfig}
-            onUpdateTimingConfig={(newTiming) => setTimingConfig(newTiming)}
+            onUpdateTimingConfig={(newTiming) => {
+              if (role === 'warden') setTimingConfig(newTiming);
+            }}
             onTriggerAutoGroupNotice={handleTriggerAutoGroupNotice}
           />
         )}
@@ -599,7 +597,9 @@ export default function App() {
             role={role}
             rooms={rooms}
             onUpdateOccupant={handleUpdateOccupant}
-            onUpdateAttendanceSummaries={(newSummaries) => setAttendanceSummaries(newSummaries)}
+            onUpdateAttendanceSummaries={(newSummaries) => {
+              if (role === 'warden') setAttendanceSummaries(newSummaries);
+            }}
           />
         )}
 
@@ -613,7 +613,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Media Lightbox Viewer Modal for Complaint Photos & Videos */}
       <MediaModal
         media={activeMedia}
         onClose={() => setActiveMedia(null)}

@@ -15,7 +15,8 @@ import {
   Edit2,
   Sliders,
   Users,
-  BellRing
+  BellRing,
+  Home
 } from 'lucide-react';
 import { StudentAttendanceSummary, Role, BlockName, AttendanceTimingConfig, UserAuthSession } from '../types';
 
@@ -59,22 +60,27 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
   const [seniorCutoff, setSeniorCutoff] = useState(timingConfig.seniorYearsBiometricCutoff);
   const [noticeSentMsg, setNoticeSentMsg] = useState<string | null>(null);
 
-  // Student view summary - matches logged in student session
+  // Student view summary
   const currentStudentSummary = (userSession?.studentId && summaries.find((s) => s.studentId === userSession.studentId)) || summaries[0];
 
-  // Warden: Calculate total missers today (students who missed biometric on Aug 3)
-  const todayMissersList = summaries.filter((s) => s.missedDates.includes('2026-08-03'));
+  // Calculate actual year from student object
+  const getStudentYear = (s: StudentAttendanceSummary): number => {
+    if (s.studentId.includes('101') || s.studentId.includes('102')) return 1;
+    if (s.studentId.includes('201') || s.studentId.includes('202')) return 2;
+    if (s.studentId.includes('301')) return 3;
+    return 4;
+  };
 
-  // Filtered summaries for Warden view
+  // Filter students who are in hostel and missed biometric today
+  const todayMissersList = summaries.filter((s) => s.missedDates.includes('2026-08-03') && s.leaveCount === 0);
+
+  // Filtered summaries for Warden & Admin
   const filteredSummaries = summaries.filter((s) => {
     if (selectedBlock !== 'All' && s.block !== selectedBlock) return false;
     if (showOnlyMissers && !s.missedDates.includes('2026-08-03')) return false;
 
-    // Filter by student academic year if selected
-    if (selectedYearFilter !== 'All') {
-      const studentObjYear = s.studentId === 'std-102' ? 1 : s.studentId === 'std-201' ? 2 : 3;
-      if (studentObjYear !== Number(selectedYearFilter)) return false;
-    }
+    const studentYear = getStudentYear(s);
+    if (selectedYearFilter !== 'All' && studentYear !== Number(selectedYearFilter)) return false;
 
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase();
@@ -87,8 +93,11 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
     return true;
   });
 
+  // Only Warden can save timings
   const handleSaveTimings = (e: React.FormEvent) => {
     e.preventDefault();
+    if (role !== 'warden') return;
+
     if (onUpdateTimingConfig) {
       onUpdateTimingConfig({
         firstYearMessTime: firstYearMess,
@@ -98,28 +107,29 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
       });
     }
     setIsEditingTimings(false);
-    setNoticeSentMsg('Biometric cutoff and mess timings successfully updated!');
+    setNoticeSentMsg('Biometric cutoff and mess timings updated successfully!');
     setTimeout(() => setNoticeSentMsg(null), 3000);
   };
 
+  // Dispatch alert to ONLY student's specific year group
   const handleDispatchGroupNotice = (s: StudentAttendanceSummary) => {
-    const studentYear = s.studentId === 'std-102' ? 1 : s.studentId === 'std-201' ? 2 : 3;
+    const studentYear = getStudentYear(s);
     if (onTriggerAutoGroupNotice) {
       onTriggerAutoGroupNotice(s.name, s.rollNo, studentYear);
     }
-    setNoticeSentMsg(`Automated Missed Notice posted to ${studentYear}st/nd/rd Year Group for ${s.name}!`);
+    setNoticeSentMsg(`✅ Alert automatically dispatched to ${studentYear}${studentYear === 1 ? 'st' : studentYear === 2 ? 'nd' : studentYear === 3 ? 'rd' : 'th'} Year Group for ${s.name}!`);
     setTimeout(() => setNoticeSentMsg(null), 3500);
   };
 
   const generateWhatsAppText = () => {
-    const header = `🚨 *HOSTEL BIOMETRIC ATTENDANCE MISS LIST*\n📅 Date: 03-August-2026\n\nThe following ${todayMissersList.length} students missed evening biometric attendance swipe:\n\n`;
+    const header = `🚨 *HOSTEL BIOMETRIC ATTENDANCE MISS LIST*\n📅 Date: 03-August-2026\n\nThe following ${todayMissersList.length} students missed evening biometric swipe (Excluding students on home leave):\n\n`;
     const listText = todayMissersList
       .map(
         (s, idx) =>
-          `${idx + 1}. *${s.name}* (${s.roomNumber}, Roll: ${s.rollNo}) - Ph: ${s.phone}`
+          `${idx + 1}. *${s.name}* (${s.roomNumber}, Roll: ${s.rollNo}) - ${getStudentYear(s)} Year`
       )
       .join('\n');
-    const footer = `\n\n⚠️ *Action Required:* Report to Warden Office immediately or present valid out-pass.`;
+    const footer = `\n\n⚠️ *Action Required:* Report to Warden Office immediately.`;
     return header + listText + footer;
   };
 
@@ -140,15 +150,17 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
               <span className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                 <Fingerprint className="w-5 h-5" />
               </span>
-              <h2 className="text-xl font-bold text-white">Biometric Attendance & Timing System</h2>
+              <h2 className="text-xl font-bold text-white">Biometric Attendance & Timing Automation</h2>
             </div>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Set year-specific biometric cutoff times and track late / missed check-ins across Tagore, Tilak & Subhash blocks.
+              {role === 'college_admin'
+                ? 'College Administration View (Monitoring & Live Attendance Records)'
+                : '1st Year Cutoff: 8:30 PM | 2nd, 3rd, 4th Year Cutoff: 9:30 PM'}
             </p>
           </div>
 
           <div className="flex items-center gap-3 bg-slate-950 px-4 py-2.5 rounded-2xl border border-slate-800">
-            <span className="text-xs font-semibold text-slate-400">Today's Missed Swipes:</span>
+            <span className="text-xs font-semibold text-slate-400">Hostel Missed Swipes Today:</span>
             <span className="text-base font-extrabold text-rose-400 px-2.5 py-0.5 rounded-lg bg-rose-500/20 border border-rose-500/30">
               {todayMissersList.length} Students
             </span>
@@ -161,11 +173,11 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
             <Clock className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
             <div className="text-xs">
               <span className="font-bold text-indigo-300 block text-sm">
-                1st Year Freshers Timing:
+                1st Year Freshers Schedule:
               </span>
               <p className="text-slate-300 mt-1">
                 Mess Dinner: <strong>{timingConfig.firstYearMessTime}</strong><br />
-                Biometric Cutoff Time: <strong className="text-indigo-400">{timingConfig.firstYearBiometricCutoff} (08:30 PM)</strong>
+                Biometric Cutoff: <strong className="text-indigo-400">{timingConfig.firstYearBiometricCutoff} (08:30 PM)</strong>
               </p>
             </div>
           </div>
@@ -174,17 +186,17 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
             <Clock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
             <div className="text-xs">
               <span className="font-bold text-amber-300 block text-sm">
-                2nd, 3rd & 4th Year Seniors Timing:
+                2nd, 3rd & 4th Year Seniors Schedule:
               </span>
               <p className="text-slate-300 mt-1">
                 Mess Dinner: <strong>{timingConfig.seniorYearsMessTime}</strong><br />
-                Biometric Cutoff Time: <strong className="text-amber-400">{timingConfig.seniorYearsBiometricCutoff} (09:30 PM)</strong>
+                Biometric Cutoff: <strong className="text-amber-400">{timingConfig.seniorYearsBiometricCutoff} (09:30 PM)</strong>
               </p>
             </div>
           </div>
         </div>
 
-        {/* Warden Timing Config Trigger */}
+        {/* 🟢 Timing Configuration button ONLY FOR WARDEN */}
         {role === 'warden' && (
           <div className="mt-4 flex justify-end">
             <button
@@ -192,23 +204,16 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-md shadow-indigo-600/20"
             >
               <Sliders className="w-4 h-4" />
-              <span>Configure Warden Biometric Cutoff Timings</span>
+              <span>Change Biometric Cutoff Timings</span>
             </button>
           </div>
         )}
       </div>
 
       {noticeSentMsg && (
-        <div className="bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 px-4 py-3 rounded-2xl flex items-center gap-2 text-xs sm:text-sm shadow-xl animate-pulse">
+        <div className="bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 px-4 py-3 rounded-2xl flex items-center gap-2 text-xs sm:text-sm shadow-xl">
           <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
           <span>{noticeSentMsg}</span>
-        </div>
-      )}
-
-      {copiedNotice && (
-        <div className="bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 px-4 py-3 rounded-2xl flex items-center gap-2 text-xs sm:text-sm shadow-lg">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-          <span>WhatsApp Group Broadcast copied to clipboard! Ready to paste into Hostel WhatsApp Group.</span>
         </div>
       )}
 
@@ -219,7 +224,7 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
             <div className="lg:col-span-1 space-y-4 border-b lg:border-b-0 lg:border-r border-slate-800 lg:pr-6">
               <div>
                 <span className="text-xs uppercase font-bold text-slate-400 tracking-wider">
-                  Personal Attendance Dashboard
+                  Personal Attendance Record
                 </span>
                 <h3 className="text-lg font-black text-white mt-1">
                   {currentStudentSummary.name}
@@ -231,16 +236,16 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
 
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
                 <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span className="text-slate-400">August Attendance Rate</span>
+                  <span className="text-slate-400">Attendance Rate</span>
                   <span className="text-emerald-400 font-extrabold">
-                    {Math.round((currentStudentSummary.presentCount / currentStudentSummary.totalDays) * 100)}%
+                    {Math.round((currentStudentSummary.presentCount / (currentStudentSummary.totalDays || 1)) * 100)}%
                   </span>
                 </div>
                 <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
                   <div
                     className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full"
                     style={{
-                      width: `${(currentStudentSummary.presentCount / currentStudentSummary.totalDays) * 100}%`
+                      width: `${(currentStudentSummary.presentCount / (currentStudentSummary.totalDays || 1)) * 100}%`
                     }}
                   />
                 </div>
@@ -262,47 +267,18 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
                   <span className="text-lg font-bold text-white mt-0.5 block">{currentStudentSummary.leaveCount}</span>
                 </div>
               </div>
-
-              {/* Physical Biometric Hardware Machine Terminal Indicator */}
-              <div className="p-4 bg-slate-950 border border-indigo-500/30 rounded-2xl space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-extrabold text-indigo-300 flex items-center gap-1.5">
-                    <Fingerprint className="w-4 h-4 text-indigo-400" />
-                    Hostel Gate Machine Terminal
-                  </span>
-                  <span className="font-mono text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                    IP: 192.168.1.108
-                  </span>
-                </div>
-
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  🔒 Attendance is logged strictly via the physical Biometric Fingerprint Machine installed at the Hostel Main Entrance. Remote in-app punching is disabled to prevent proxy attendance.
-                </p>
-
-                {currentStudentSummary.missedDates.includes('2026-08-03') ? (
-                  <div className="p-3 bg-rose-950/40 border border-rose-500/30 rounded-xl text-xs text-rose-300 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                    <span>No Physical Machine Swipe Recorded Today. Please scan at Hostel Gate Reader before cutoff.</span>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Physical Biometric Machine Swipe Synced (Scanned at Hostel Gate Terminal @ 08:14 PM).</span>
-                  </div>
-                )}
-              </div>
             </div>
 
             <div className="lg:col-span-2 space-y-4">
               <h4 className="text-sm font-bold text-white flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-rose-400" />
-                Biometric Punch Missed Dates (August Log):
+                Biometric Punch Missed Dates:
               </h4>
 
               {currentStudentSummary.missedDates.length === 0 ? (
                 <div className="bg-emerald-950/30 border border-emerald-500/30 p-4 rounded-xl text-xs text-emerald-300 flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                  100% Biometric Swipe Record! No missed dates recorded this month.
+                  100% Biometric Swipe Record! No missed dates recorded.
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -316,13 +292,13 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
                         <div>
                           <p className="text-xs font-bold text-white">{date}</p>
                           <p className="text-[11px] text-slate-400">
-                            Punched after warden cutoff limit or missed biometric log.
+                            Missed check-in before evening cutoff time.
                           </p>
                         </div>
                       </div>
 
-                      <span className="px-2.5 py-1 rounded-md text-[10px] uppercase font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                        Log Dispatched To Year Group
+                      <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                        Dispatched To Year Group
                       </span>
                     </div>
                   ))}
@@ -333,68 +309,9 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
         </div>
       )}
 
-      {/* WARDEN / ADMIN VIEW */}
-      {role === 'warden' && (
+      {/* WARDEN & ADMIN VIEW */}
+      {(role === 'warden' || role === 'college_admin') && (
         <div className="space-y-6">
-          {/* Hardware Machine Terminal Sync Console */}
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
-                <Fingerprint className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                  Hostel Gate Biometric Hardware Readers
-                  <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                    2 Terminals Online
-                  </span>
-                </h4>
-                <p className="text-xs text-slate-400">
-                  Terminal 01 (Tagore Gate - IP 192.168.1.108) • Terminal 02 (Tilak Gate - IP 192.168.1.109)
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
-                setNoticeSentMsg('Live Physical Biometric Machine Logs fetched from Gate Readers IP 192.168.1.108!');
-                setTimeout(() => setNoticeSentMsg(null), 3500);
-              }}
-              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-md shadow-indigo-600/20 shrink-0"
-            >
-              <Fingerprint className="w-4 h-4" />
-              <span>Sync Hardware Biometric Machine Logs</span>
-            </button>
-          </div>
-
-          <div className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-slate-900 border border-emerald-500/40 rounded-3xl p-5 shadow-xl">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Send className="w-5 h-5 text-emerald-400" />
-                  <h3 className="text-lg font-bold text-white">
-                    Biometric Missed List (WhatsApp & Year Group Dispatch)
-                  </h3>
-                </div>
-                <p className="text-xs text-slate-300 mt-1">
-                  Click below to copy WhatsApp broadcast notice for parent & hostel group.
-                </p>
-              </div>
-
-              <button
-                onClick={handleCopyWhatsAppText}
-                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition-all self-start md:self-auto"
-              >
-                {copiedNotice ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                {copiedNotice ? 'Copied!' : '📋 Copy WhatsApp Group Notice'}
-              </button>
-            </div>
-
-            <div className="mt-4 bg-slate-950 p-4 rounded-2xl border border-slate-800 text-xs font-mono text-emerald-300 whitespace-pre-line leading-relaxed">
-              {generateWhatsAppText()}
-            </div>
-          </div>
-
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md flex flex-col md:flex-row gap-3 items-center justify-between">
             <div className="relative w-full md:w-80">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -416,7 +333,7 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
                     : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
                 }`}
               >
-                ⚠️ Today's Missers ({todayMissersList.length})
+                ⚠️ Missed Today ({todayMissersList.length})
               </button>
 
               <select
@@ -424,7 +341,7 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
                 onChange={(e) => setSelectedYearFilter(e.target.value === 'All' ? 'All' : Number(e.target.value))}
                 className="bg-slate-950 text-slate-300 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-semibold"
               >
-                <option value="All">All Academic Years</option>
+                <option value="All">All Years</option>
                 <option value={1}>1st Year</option>
                 <option value={2}>2nd Year</option>
                 <option value={3}>3rd Year</option>
@@ -453,15 +370,17 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
                 <thead className="bg-slate-950 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
                   <tr>
                     <th className="px-5 py-3.5">Student</th>
-                    <th className="px-5 py-3.5">Block & Room</th>
+                    <th className="px-5 py-3.5">Year & Room</th>
                     <th className="px-5 py-3.5">Biometric Status Today</th>
                     <th className="px-5 py-3.5">Total Misses</th>
-                    <th className="px-5 py-3.5 text-right">Warden Actions</th>
+                    {role === 'warden' && <th className="px-5 py-3.5 text-right">Warden Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   {filteredSummaries.map((s) => {
                     const isMissedToday = s.missedDates.includes('2026-08-03');
+                    const studentYear = getStudentYear(s);
+                    const isOnLeave = s.leaveCount > 0;
 
                     return (
                       <tr key={s.studentId} className="hover:bg-slate-800/40 transition-colors">
@@ -471,16 +390,21 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
                           </div>
                           <div>
                             <p className="text-sm font-bold text-white">{s.name}</p>
-                            <p className="text-[11px] text-slate-400">{s.rollNo}</p>
+                            <p className="text-[11px] text-slate-400 font-mono">{s.rollNo}</p>
                           </div>
                         </td>
 
                         <td className="px-5 py-4 font-semibold text-slate-200">
-                          {s.roomNumber} ({s.block})
+                          <span className="text-indigo-400 font-bold">{studentYear} Year</span> • {s.roomNumber} ({s.block})
                         </td>
 
                         <td className="px-5 py-4">
-                          {isMissedToday ? (
+                          {isOnLeave ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                              <Home className="w-3.5 h-3.5 text-amber-400" />
+                              On Approved Home Leave
+                            </span>
+                          ) : isMissedToday ? (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40">
                               <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
                               Missed Cutoff Punch
@@ -499,37 +423,40 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
                           </span>
                         </td>
 
-                        <td className="px-5 py-4 text-right">
-                          <div className="flex items-center justify-end space-x-2">
-                            {isMissedToday && (
-                              <button
-                                onClick={() => handleDispatchGroupNotice(s)}
-                                className="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-500/40 rounded-lg text-xs font-bold flex items-center gap-1"
-                                title="Send automated alert to student's year group"
-                              >
-                                <BellRing className="w-3.5 h-3.5" />
-                                Post to Year Group
-                              </button>
-                            )}
+                        {/* Actions ONLY FOR WARDEN (Admin cannot edit) */}
+                        {role === 'warden' && (
+                          <td className="px-5 py-4 text-right">
+                            <div className="flex items-center justify-end space-x-2">
+                              {isMissedToday && !isOnLeave && (
+                                <button
+                                  onClick={() => handleDispatchGroupNotice(s)}
+                                  className="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-500/40 rounded-lg text-xs font-bold flex items-center gap-1"
+                                  title={`Send automated alert to ${studentYear} Year Group`}
+                                >
+                                  <BellRing className="w-3.5 h-3.5" />
+                                  Post to {studentYear} Year Group
+                                </button>
+                              )}
 
-                            <a
-                              href={`tel:${s.phone}`}
-                              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1"
-                            >
-                              <Phone className="w-3.5 h-3.5" />
-                              Call
-                            </a>
-
-                            {isMissedToday && (
-                              <button
-                                onClick={() => onExcuseMissedDate(s.studentId, '2026-08-03')}
-                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow-xs"
+                              <a
+                                href={`tel:${s.phone}`}
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1"
                               >
-                                Excused
-                              </button>
-                            )}
-                          </div>
-                        </td>
+                                <Phone className="w-3.5 h-3.5" />
+                                Call
+                              </a>
+
+                              {isMissedToday && (
+                                <button
+                                  onClick={() => onExcuseMissedDate(s.studentId, '2026-08-03')}
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold"
+                                >
+                                  Excused
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -541,7 +468,7 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
       )}
 
       {/* Warden Timing Config Modal */}
-      {isEditingTimings && (
+      {isEditingTimings && role === 'warden' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
@@ -551,7 +478,7 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
               <div>
                 <h3 className="text-lg font-bold text-white">Configure Warden Attendance Timings</h3>
                 <p className="text-xs text-slate-400">
-                  Set cut-off times for 1st Year vs Senior Years
+                  Set cut-off times for 1st Year (Freshers) vs Senior Years
                 </p>
               </div>
             </div>
