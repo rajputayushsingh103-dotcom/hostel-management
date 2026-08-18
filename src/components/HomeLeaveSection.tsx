@@ -85,7 +85,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   const [destination, setDestination] = useState('');
   const [departureDate, setDepartureDate] = useState('');
   
-  // 🟢 Home Leave Specific Dates & Calculated Day
+  // Home Leave Specific Dates & Calculated Day
   const [homeReturnDate, setHomeReturnDate] = useState('');
   const [homeReturnDay, setHomeReturnDay] = useState('');
 
@@ -109,7 +109,6 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const todayDayName = dayNames[now.getDay()];
 
-  // Auto Live Date & Time Formatter (IST)
   const getLiveDateAndTimeString = () => {
     const d = new Date();
     const datePart = d.toISOString().split('T')[0];
@@ -120,7 +119,6 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   useEffect(() => {
     if (showApplyModal) {
       setDepartureDate(getLiveDateAndTimeString());
-      // Default return date after 2 days for home leave
       const nextDate = new Date();
       nextDate.setDate(nextDate.getDate() + 2);
       const nextDateStr = nextDate.toISOString().split('T')[0];
@@ -129,7 +127,6 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
     }
   }, [showApplyModal]);
 
-  // Handle Return Date Change & Auto-Calculate Return Day
   const handleReturnDateChange = (val: string) => {
     setHomeReturnDate(val);
     if (val) {
@@ -236,14 +233,24 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
       return;
     }
 
-    if (!destination.trim() || !reasonOrAddress.trim() || !parentPhone.trim()) {
-      setFormError(passCategory === 'Outstation Vacation' ? 'Kripya apna Address Without College dalein!' : 'Kripya saari details bharein.');
+    if (!destination.trim()) {
+      setFormError('Kripya destination bharein.');
+      return;
+    }
+
+    // 🟢 Address is MANDATORY only for Home Leave; Optional for Local Outing
+    if (passCategory === 'Outstation Vacation' && !reasonOrAddress.trim()) {
+      setFormError('⚠️ Home Leave ke liye "Address Without College" bharna anivarya (mandatory) hai!');
       return;
     }
 
     const calculatedReturnStr = passCategory === 'Outstation Vacation'
       ? `${homeReturnDate} (${homeReturnDay}) 08:00 PM`
-      : 'Today 08:00 PM';
+      : 'Today strictly before 08:00 PM';
+
+    const finalReason = passCategory === 'Outstation Vacation'
+      ? `Address: ${reasonOrAddress.trim()} (Return Day: ${homeReturnDay})`
+      : (reasonOrAddress.trim() || 'General Local Outing');
 
     onApplyLeavePass({
       studentId: userSession.studentId || 'std-101',
@@ -253,10 +260,10 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
       roomNumber: userSession.roomNumber || 'Tagore-101',
       studentPhone: studentPhone,
       parentPhone: parentPhone,
-      destination: destination,
+      destination: destination.trim(),
       departureDate: getLiveDateAndTimeString(),
       expectedReturnDate: calculatedReturnStr,
-      reason: passCategory === 'Outstation Vacation' ? `Address: ${reasonOrAddress.trim()} (Return: ${homeReturnDay})` : reasonOrAddress.trim(),
+      reason: finalReason,
       passCategory: passCategory,
       year: studentYear,
       isGymPass: false,
@@ -468,9 +475,9 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                   </h3>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300">
-                    <div><strong>Destination / City:</strong> {pass.destination}</div>
-                    <div><strong>Departure (Auto IST):</strong> <span className="font-mono text-emerald-400">{pass.departureDate}</span></div>
-                    <div><strong>Return Cutoff:</strong> <span className="font-mono text-rose-400">{pass.expectedReturnDate}</span></div>
+                    <div><strong>Destination:</strong> {pass.destination}</div>
+                    <div><strong>Departure:</strong> <span className="font-mono text-emerald-400">{pass.departureDate}</span></div>
+                    <div><strong>Return Date/Time:</strong> <span className="font-mono text-rose-400">{pass.expectedReturnDate}</span></div>
                     <div className="sm:col-span-2 bg-slate-950 p-2 rounded-lg border border-slate-800">
                       <strong>{pass.passCategory === 'Outstation Vacation' ? 'Address Without College:' : 'Reason:'}</strong> {pass.reason}
                     </div>
@@ -664,7 +671,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
         </div>
       )}
 
-      {/* 🟢 APPLY PASS MODAL (AUTO FETCH DEPARTURE DATE & RETURN DATE + AUTO RETURN DAY) */}
+      {/* 🟢 APPLY PASS MODAL */}
       {showApplyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
@@ -750,7 +757,6 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 />
               </div>
 
-              {/* 🟢 DEPARTURE DATE (AUTO-FETCHED LIVE IST) */}
               <div>
                 <label className="block text-xs font-semibold text-indigo-400 mb-1 flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5 text-indigo-400" />
@@ -764,7 +770,6 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 />
               </div>
 
-              {/* 🟢 RETURN DATE & AUTOMATIC RETURN DAY FOR HOME LEAVE */}
               {passCategory === 'Outstation Vacation' ? (
                 <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950 border border-slate-800 rounded-xl">
                   <div>
@@ -807,14 +812,14 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 </div>
               )}
 
-              {/* MANDATORY ADDRESS WITHOUT COLLEGE */}
+              {/* 🟢 REASON (OPTIONAL FOR LOCAL OUTING) / ADDRESS (MANDATORY FOR HOME LEAVE) */}
               <div>
                 <label className="block text-xs font-bold text-amber-300 mb-1 flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5 text-amber-400" />
                   <span>
                     {passCategory === 'Outstation Vacation' 
                       ? 'Address Without College (घर/ठहरने का पूरा पता) *Mandatory:' 
-                      : 'Reason for Outing (कारण) *Mandatory:'}
+                      : 'Reason for Outing (Optional - जरूरी नहीं):'}
                   </span>
                 </label>
                 <textarea
@@ -824,10 +829,12 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                   placeholder={
                     passCategory === 'Outstation Vacation'
                       ? 'Enter complete permanent home address / stay location outside college (House No, Street, City, Pincode)...'
-                      : 'e.g. Buying study materials / urgent grocery...'
+                      : 'e.g. Buying books / grocery (optional)...'
                   }
-                  className="w-full bg-slate-950 border border-amber-500/50 rounded-xl px-3.5 py-2 text-xs text-white focus:border-amber-400"
-                  required
+                  className={`w-full bg-slate-950 border rounded-xl px-3.5 py-2 text-xs text-white ${
+                    passCategory === 'Outstation Vacation' ? 'border-amber-500/60 focus:border-amber-400' : 'border-slate-800'
+                  }`}
+                  required={passCategory === 'Outstation Vacation'}
                 />
               </div>
 
