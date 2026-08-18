@@ -14,6 +14,7 @@ export interface StudentRecord {
   studentId: string;
   name: string;
   rollNo: string;
+  faceId?: string; // 👈 Biometric Machine Face ID
   roomNumber: string;
   block: BlockName;
   year: number;
@@ -29,6 +30,7 @@ const INITIAL_STUDENTS: StudentRecord[] = [
     studentId: 'std-101',
     name: 'Aayush Singh',
     rollNo: '2024CS101',
+    faceId: 'FID-101',
     roomNumber: 'Tagore-101',
     block: 'Tagore',
     year: 3,
@@ -40,6 +42,7 @@ const INITIAL_STUDENTS: StudentRecord[] = [
     studentId: 'std-102',
     name: 'om singh',
     rollNo: '2504221530041',
+    faceId: 'FID-102',
     roomNumber: 'Tilak-200',
     block: 'Tilak',
     year: 2,
@@ -50,6 +53,7 @@ const INITIAL_STUDENTS: StudentRecord[] = [
 ];
 
 export const hostelDB = {
+  // 🟢 1. Saare Students Cloud Se Fetch Karna
   getAllStudents: async (): Promise<StudentRecord[]> => {
     try {
       const colRef = collection(db, COLLECTION_NAME);
@@ -73,6 +77,7 @@ export const hostelDB = {
     }
   },
 
+  // 🟢 2. Realtime Listener (Mobile & Laptop sync)
   subscribeToStudents: (callback: (students: StudentRecord[]) => void) => {
     const colRef = collection(db, COLLECTION_NAME);
 
@@ -97,6 +102,7 @@ export const hostelDB = {
     );
   },
 
+  // 🟢 3. Student Add Karna (Face ID ke sath)
   addStudent: async (newStudent: StudentRecord): Promise<void> => {
     const cleanRoll = newStudent.rollNo.trim().toUpperCase();
     const docRef = doc(db, COLLECTION_NAME, cleanRoll);
@@ -105,24 +111,28 @@ export const hostelDB = {
       {
         ...newStudent,
         studentId: cleanRoll,
-        rollNo: cleanRoll
+        rollNo: cleanRoll,
+        faceId: newStudent.faceId || `FID-${cleanRoll.slice(-3)}`
       },
       { merge: true }
     );
   },
 
+  // 🟢 4. Student Update Karna
   updateStudent: async (studentId: string, updatedFields: Partial<StudentRecord>): Promise<void> => {
     const cleanId = studentId.trim().toUpperCase();
     const docRef = doc(db, COLLECTION_NAME, cleanId);
     await setDoc(docRef, { ...updatedFields, studentId: cleanId }, { merge: true });
   },
 
+  // 🟢 5. Student Delete Karna
   deleteStudent: async (studentId: string): Promise<void> => {
     const cleanId = studentId.trim().toUpperCase();
     const docRef = doc(db, COLLECTION_NAME, cleanId);
     await deleteDoc(docRef);
   },
 
+  // 🟢 6. Login Authentication
   authenticateStudent: async (rollNo: string, pass: string): Promise<StudentRecord | null> => {
     const list = await hostelDB.getAllStudents();
     const inputRoll = rollNo.trim().toUpperCase();

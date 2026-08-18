@@ -1,7 +1,7 @@
 // src/components/StudentManager.tsx
 import React, { useState, useEffect } from 'react';
 import { hostelDB, StudentRecord } from '../data/hostelDB';
-import { UserMinus, UserPlus, Search, CheckCircle, DoorOpen, Edit3, X } from 'lucide-react';
+import { UserMinus, UserPlus, Search, CheckCircle, DoorOpen, Edit3, X, ScanFace } from 'lucide-react';
 import { BlockName, Role } from '../types';
 
 interface StudentManagerProps {
@@ -18,6 +18,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' 
   // Add State
   const [name, setName] = useState('');
   const [rollNo, setRollNo] = useState('');
+  const [faceId, setFaceId] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
   const [block, setBlock] = useState<BlockName>('Tagore');
   const [year, setYear] = useState<number>(1);
@@ -62,6 +63,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' 
       studentId: cleanRoll,
       name: name.trim(),
       rollNo: cleanRoll,
+      faceId: faceId.trim() || `FID-${cleanRoll.slice(-3)}`,
       roomNumber: roomNumber.trim(),
       block,
       year: Number(year),
@@ -74,11 +76,12 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' 
     setShowAddForm(false);
     setName('');
     setRollNo('');
+    setFaceId('');
     setRoomNumber('');
     setPassword('');
     setParentPhone('');
 
-    setSuccessMsg(`✅ Student ${newStd.name} (Roll: ${newStd.rollNo}) saved!`);
+    setSuccessMsg(`✅ Student ${newStd.name} (Face ID: ${newStd.faceId}) saved!`);
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
@@ -98,6 +101,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' 
       studentId: newRoll,
       name: editingStudent.name.trim(),
       rollNo: newRoll,
+      faceId: editingStudent.faceId?.trim() || `FID-${newRoll.slice(-3)}`,
       roomNumber: editingStudent.roomNumber.trim(),
       block: editingStudent.block,
       year: Number(editingStudent.year),
@@ -117,6 +121,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' 
     (s) =>
       s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.rollNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.faceId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.roomNumber?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -126,10 +131,10 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' 
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
             <DoorOpen className="w-5 h-5 text-indigo-400" />
-            <span>Hostel Student Records & Admissions</span>
+            <span>Hostel Student Records & Biometric Face Registry</span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            {isReadOnly ? 'College Administration Monitoring Mode (View-Only)' : 'Chief Warden Executive Dashboard'}
+            {isReadOnly ? 'College Administration Monitoring Mode (View-Only)' : 'Chief Warden Executive Dashboard • Hardware Biometric ID Integration'}
           </p>
         </div>
 
@@ -186,6 +191,20 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' 
               </div>
 
               <div>
+                <label className="block text-emerald-400 font-bold mb-1 flex items-center gap-1">
+                  <ScanFace className="w-3.5 h-3.5" />
+                  <span>Biometric Machine Face ID:</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingStudent.faceId || ''}
+                  onChange={(e) => setEditingStudent({ ...editingStudent, faceId: e.target.value })}
+                  placeholder="e.g. 101 or FID-101"
+                  className="w-full bg-slate-900 border border-emerald-500/60 rounded-xl p-2.5 text-emerald-300 font-bold font-mono"
+                />
+              </div>
+
+              <div>
                 <label className="block text-red-400 font-bold mb-1">Password (Login Password):</label>
                 <input
                   type="text"
@@ -234,7 +253,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' 
                 </select>
               </div>
 
-              <div className="sm:col-span-3">
+              <div className="sm:col-span-2">
                 <label className="block text-slate-300 mb-1">Parent Phone:</label>
                 <input
                   type="text"
@@ -288,6 +307,13 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' 
             />
             <input
               type="text"
+              placeholder="Biometric Machine Face ID (e.g. 101)"
+              value={faceId}
+              onChange={(e) => setFaceId(e.target.value)}
+              className="bg-slate-900 border border-emerald-500/40 rounded-xl p-2.5 text-emerald-300 font-mono"
+            />
+            <input
+              type="text"
               placeholder="Room No (e.g. Tagore-201)"
               value={roomNumber}
               onChange={(e) => setRoomNumber(e.target.value)}
@@ -321,7 +347,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' 
               className="bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white"
               required
             />
-            <div className="sm:col-span-3">
+            <div className="sm:col-span-2">
               <input
                 type="text"
                 placeholder="Set Student Password for Login"
@@ -333,7 +359,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' 
             </div>
           </div>
           <button type="submit" className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-xs mt-2 text-white shadow-lg">
-            Save Student
+            Save Student & Face ID
           </button>
         </form>
       )}
@@ -342,7 +368,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' 
       <div className="relative mb-4">
         <input
           type="text"
-          placeholder="Search student by name, roll no, room..."
+          placeholder="Search student by name, roll no, face ID, room..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white"
@@ -356,6 +382,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' 
           <thead>
             <tr className="border-b border-slate-800 text-slate-400">
               <th className="py-2.5 px-3">Roll No</th>
+              <th className="py-2.5 px-3">Face ID</th>
               <th className="py-2.5 px-3">Name</th>
               <th className="py-2.5 px-3">Room</th>
               <th className="py-2.5 px-3">Year</th>
@@ -368,6 +395,11 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' 
             {filtered.map((std) => (
               <tr key={std.studentId || std.rollNo} className="hover:bg-slate-950/50">
                 <td className="py-3 px-3 font-mono font-bold text-indigo-400">{std.rollNo}</td>
+                <td className="py-3 px-3 font-mono font-bold text-emerald-400">
+                  <span className="bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                    {std.faceId || `FID-${std.rollNo.slice(-3)}`}
+                  </span>
+                </td>
                 <td className="py-3 px-3 font-semibold text-white">{std.name}</td>
                 <td className="py-3 px-3 text-amber-400 font-bold">{std.roomNumber} ({std.block})</td>
                 <td className="py-3 px-3 text-emerald-400">{std.year} Year</td>

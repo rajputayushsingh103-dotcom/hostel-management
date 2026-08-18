@@ -13,7 +13,7 @@ export interface RoomOccupant {
   parentPhone?: string;
   avatar: string;
   photoUrl?: string;
-  faceId?: string;
+  faceId?: string; // 👈 Biometric Machine Face ID
   hostelAttendanceToday: 'present' | 'absent' | 'leave';
   collegeAttendanceToday: 'present' | 'absent' | 'leave';
 }
@@ -23,6 +23,7 @@ export interface UserAuthSession {
   studentId?: string;
   name: string;
   rollNo?: string;
+  faceId?: string; // 👈 Biometric Machine Face ID
   block?: BlockName;
   roomNumber?: string;
   year?: number;
@@ -32,9 +33,9 @@ export interface UserAuthSession {
 
 export interface AttendanceTimingConfig {
   firstYearMessTime: string;
-  firstYearBiometricCutoff: string;
+  firstYearBiometricCutoff: string; // e.g. "20:30" (08:30 PM)
   seniorYearsMessTime: string;
-  seniorYearsBiometricCutoff: string;
+  seniorYearsBiometricCutoff: string; // e.g. "21:30" (09:30 PM)
 }
 
 export interface YearGroupMessage {
@@ -65,6 +66,7 @@ export interface HomeLeavePass {
   studentId: string;
   studentName: string;
   rollNo: string;
+  faceId?: string;
   block: BlockName;
   roomNumber: string;
   studentPhone: string;
@@ -91,6 +93,7 @@ export interface GymMemberRecord {
   id: string;
   studentName: string;
   rollNo: string;
+  faceId?: string;
   roomNumber: string;
   block: BlockName;
   year: number;
@@ -100,11 +103,11 @@ export interface GymMemberRecord {
 }
 
 export interface OutingRulesConfig {
-  firstYearOutingDays: string[];
+  firstYearOutingDays: string[]; // ['Wednesday', 'Sunday']
   firstYearStartTime: string;
   firstYearEndTime: string;
-  seniorRestrictedDay: string;
-  curfewReturnTime: string;
+  seniorRestrictedDay: string; // 'Wednesday'
+  curfewReturnTime: string; // '08:00 PM'
   gymDailyOutingEnabled: boolean;
   multiEntryPerDayEnabled: boolean;
 }
@@ -177,6 +180,7 @@ export interface StudentAttendanceSummary {
   studentId: string;
   name: string;
   rollNo: string;
+  faceId?: string; // 👈 Biometric Machine Face ID
   block: BlockName;
   roomNumber: string;
   phone: string;
