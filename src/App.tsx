@@ -59,10 +59,8 @@ export default function App() {
     return null;
   });
 
-  // Active Tab
   const [activeTab, setActiveTab] = useState<string>('leave');
 
-  // Core Data States with localStorage persistence
   const [menuList, setMenuList] = useState<DayMessMenu[]>(() => {
     const saved = localStorage.getItem('hostel_menu');
     return saved ? JSON.parse(saved) : INITIAL_MESS_MENU;
@@ -108,13 +106,11 @@ export default function App() {
     return saved ? JSON.parse(saved) : DEFAULT_OUTING_RULES;
   });
 
-  // Room Directory Visibility
   const [isRoomDirectoryVisibleToStudents, setIsRoomDirectoryVisibleToStudents] = useState<boolean>(() => {
     const saved = localStorage.getItem('hostel_room_directory_visible');
     return saved ? JSON.parse(saved) : false;
   });
 
-  // Photo & Video Lightbox Modal State
   const [activeMedia, setActiveMedia] = useState<ComplaintMedia | null>(null);
 
   // Sync to localStorage
@@ -166,13 +162,59 @@ export default function App() {
     localStorage.setItem('hostel_outing_rules', JSON.stringify(outingRules));
   }, [outingRules]);
 
+  // 🟢 100% AUTOMATIC ATTENDANCE MISSED CRON SCANNER
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      const currentTimeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      const todayDateStr = now.toISOString().split('T')[0];
+
+      // Scan all missers who are not on home leave
+      attendanceSummaries.forEach((student) => {
+        const studentYear = (student.studentId.includes('101') || student.studentId.includes('102')) ? 1 : (student.studentId.includes('201') ? 2 : 3);
+        const cutoffTime = studentYear === 1 ? timingConfig.firstYearBiometricCutoff : timingConfig.seniorYearsBiometricCutoff;
+
+        // Check if student missed and cutoff time reached
+        const isMissed = student.missedDates.length > 0;
+        const isOnLeave = student.leaveCount > 0;
+
+        if (isMissed && !isOnLeave) {
+          // Check if already posted to group today
+          const alreadyPosted = yearGroupMessages.some(
+            (m) => m.flaggedStudentRoll === student.rollNo && m.timestamp.includes(todayDateStr)
+          );
+
+          if (!alreadyPosted) {
+            const autoMsg: YearGroupMessage = {
+              id: `auto-${Date.now()}-${student.studentId}`,
+              yearGroup: studentYear as 1 | 2 | 3 | 4,
+              senderName: 'Hostel System Automation',
+              senderRole: 'System Automation',
+              message: `🚨 AUTOMATED BIOMETRIC NOTICE: Student ${student.name} (${student.rollNo}, Room ${student.roomNumber}) missed the evening biometric cutoff punch. Please report to Warden Office.`,
+              timestamp: `${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+              isAutomatedMissedNotice: true,
+              flaggedStudentName: student.name,
+              flaggedStudentRoll: student.rollNo,
+              flaggedStudentRoom: student.roomNumber
+            };
+
+            setYearGroupMessages((prev) => [autoMsg, ...prev]);
+          }
+        }
+      });
+    }, 60000); // Scans every 60 seconds
+
+    return () => clearInterval(interval);
+  }, [attendanceSummaries, timingConfig, yearGroupMessages]);
+
   if (!userSession) {
     return <LoginPage onLogin={(session) => setUserSession(session)} />;
   }
 
   const role = userSession.role;
 
-  // Derived counts for navbar badges
   const activeAlertCount = alerts.filter((a) => a.active).length;
   const bunkCount = attendanceSummaries.filter((s) => s.collegeBunkFlagToday).length;
   const missedBiometricCount = attendanceSummaries.filter((s) =>
@@ -201,8 +243,8 @@ export default function App() {
     setLeavePasses([newPass, ...leavePasses]);
   };
 
-  const handleUpdateLeaveStatus = (id: string, status: LeaveStatus, resendSms: boolean = false) => {
-    if (role !== 'warden') return; // Only Warden can approve/reject
+  const handleUpdateLeaveStatus = (id: string, status: LeaveStatus) => {
+    if (role !== 'warden') return;
 
     setLeavePasses(
       leavePasses.map((p) => {
@@ -469,28 +511,6 @@ export default function App() {
     setYearGroupMessages([newMsg, ...yearGroupMessages]);
   };
 
-  // 🟢 Automated Year-Wise Group Notice (No Parent SMS)
-  const handleTriggerAutoGroupNotice = (studentName: string, rollNo: string, year: number) => {
-    const now = new Date();
-    const timeStr = `${now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-
-    const targetYear = (year >= 1 && year <= 4 ? year : 1) as 1 | 2 | 3 | 4;
-
-    const autoMsg: YearGroupMessage = {
-      id: `auto-${Date.now()}`,
-      yearGroup: targetYear,
-      senderName: 'Hostel System Automation',
-      senderRole: 'System Automation',
-      message: `🚨 MISSED BIOMETRIC ATTENDANCE NOTICE: Student ${studentName} (${rollNo}) missed the evening biometric cutoff punch today. Please report to Warden Office.`,
-      timestamp: timeStr,
-      isAutomatedMissedNotice: true,
-      flaggedStudentName: studentName,
-      flaggedStudentRoll: rollNo
-    };
-
-    setYearGroupMessages([autoMsg, ...yearGroupMessages]);
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
       <Navbar
@@ -506,7 +526,6 @@ export default function App() {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Tab 1: Student Manager (Only Warden can edit, Admin can view) */}
         {activeTab === 'students' && (role === 'warden' || role === 'college_admin') && (
           <StudentManager />
         )}
@@ -578,7 +597,6 @@ export default function App() {
             onUpdateTimingConfig={(newTiming) => {
               if (role === 'warden') setTimingConfig(newTiming);
             }}
-            onTriggerAutoGroupNotice={handleTriggerAutoGroupNotice}
           />
         )}
 
