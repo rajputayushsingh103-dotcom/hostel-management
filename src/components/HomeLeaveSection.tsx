@@ -84,7 +84,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   const [passCategory, setPassCategory] = useState<PassCategory>('Local Outing');
   const [destination, setDestination] = useState('');
 
-  // 🟢 Dynamic Datetime Strings (YYYY-MM-DDTHH:mm)
+  // 🟢 Completely Blank Initial States for Manual Selection
   const [departureDateTime, setDepartureDateTime] = useState('');
   const [returnDateTime, setReturnDateTime] = useState('');
   const [homeReturnDay, setHomeReturnDay] = useState('');
@@ -109,7 +109,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const todayDayName = dayNames[now.getDay()];
 
-  // Helper to format Date to input datetime-local format: "YYYY-MM-DDTHH:mm"
+  // Format Date to "YYYY-MM-DDTHH:mm" for input min attribute
   const formatDateTimeLocal = (dateObj: Date) => {
     const year = dateObj.getFullYear();
     const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -119,25 +119,22 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
-  // Current Min Timestamp for Departure (No Past Dates or Past Hours)
-  const minDepartureDateTime = formatDateTimeLocal(now);
+  // 🟢 Live Current Time String as Minimum Limit (Past time cannot be selected)
+  const currentMinDateTime = formatDateTimeLocal(now);
 
+  // Reset form when modal opens (No auto-fill for home leave dates)
   useEffect(() => {
     if (showApplyModal) {
-      const currentFormatted = formatDateTimeLocal(new Date());
-      setDepartureDateTime(currentFormatted);
-
-      // Default return: 2 days later
-      const defaultReturn = new Date();
-      defaultReturn.setDate(defaultReturn.getDate() + 2);
-      defaultReturn.setHours(20, 0, 0, 0); // 8:00 PM
-      const returnFormatted = formatDateTimeLocal(defaultReturn);
-      setReturnDateTime(returnFormatted);
-      setHomeReturnDay(dayNames[defaultReturn.getDay()]);
+      setDepartureDateTime('');
+      setReturnDateTime('');
+      setHomeReturnDay('');
+      setDestination('');
+      setReasonOrAddress('');
+      setFormError('');
     }
   }, [showApplyModal]);
 
-  // Handle Return Date Time Change
+  // Handle Return Date Time Change and calculate Day
   const handleReturnDateTimeChange = (val: string) => {
     setReturnDateTime(val);
     if (val) {
@@ -150,10 +147,10 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
     }
   };
 
-  // Check Application Window for Local Outing
+  // Application Window check for Local Outing
   const checkApplicationWindow = (category: PassCategory) => {
     if (category === 'Outstation Vacation') {
-      return { isOpen: true, message: '✈️ Home / Night Stay Leave: Open 24x7. Select future departure date & time.' };
+      return { isOpen: true, message: '✈️ Home / Night Stay Leave: Open 24x7. Select your departure & return schedule.' };
     }
 
     const currentHour = now.getHours();
@@ -250,18 +247,27 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
       return;
     }
 
-    // Departure Validation
+    // Departure Validation (Manual Selection)
+    if (!departureDateTime) {
+      setFormError('Kripya Ghar jane ki Date aur Time select karein!');
+      return;
+    }
+
     const selectedDeparture = new Date(departureDateTime);
     if (selectedDeparture < now) {
-      setFormError('⚠️ Beete hue purane time ya date par pass apply nahi kar sakte!');
+      setFormError('⚠️ Beete hue purane time ya purani date par pass apply nahi kar sakte!');
       return;
     }
 
     // Return Validation for Home Leave
     if (passCategory === 'Outstation Vacation') {
+      if (!returnDateTime) {
+        setFormError('Kripya wapas aane ki Date aur Time select karein!');
+        return;
+      }
       const selectedReturn = new Date(returnDateTime);
       if (selectedReturn <= selectedDeparture) {
-        setFormError('⚠️ Wapas aane ki date/time hamesha Ghar jane ke samay ke baad ki honi chahiye!');
+        setFormError('⚠️ Wapas aane ki date aur time hamesha Ghar jane ke samay ke baad ki honi chahiye!');
         return;
       }
       if (!reasonOrAddress.trim()) {
@@ -270,7 +276,6 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
       }
     }
 
-    // Display formatted strings
     const departureDisplayStr = `${selectedDeparture.toLocaleDateString()} (${dayNames[selectedDeparture.getDay()]}) ${selectedDeparture.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     const returnDisplayStr = passCategory === 'Outstation Vacation'
       ? `${new Date(returnDateTime).toLocaleDateString()} (${homeReturnDay}) ${new Date(returnDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
@@ -699,7 +704,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
         </div>
       )}
 
-      {/* 🟢 APPLY PASS MODAL (DYNAMIC DEPARTURE & RETURN DATETIME CONTROLS) */}
+      {/* 🟢 APPLY PASS MODAL (NO AUTO-FILL, PAST DATES/HOURS BLOCKED) */}
       {showApplyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
@@ -758,7 +763,12 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                     <button
                       type="button"
                       key={cat}
-                      onClick={() => setPassCategory(cat)}
+                      onClick={() => {
+                        setPassCategory(cat);
+                        setDepartureDateTime('');
+                        setReturnDateTime('');
+                        setHomeReturnDay('');
+                      }}
                       className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
                         passCategory === cat
                           ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold'
@@ -785,23 +795,29 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 />
               </div>
 
-              {/* 🟢 DEPARTURE DATE & TIME PICKER (PAST TIME & DATES BLOCKED) */}
+              {/* 🟢 DEPARTURE DATE & TIME (MANUAL SELECTION, PAST DATES/HOURS BLOCKED) */}
               <div>
                 <label className="block text-xs font-semibold text-indigo-400 mb-1 flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-                  {passCategory === 'Outstation Vacation' ? 'Ghar Jane Ki Date & Time (Select Future Date/Time):' : 'Departure Time (Current):'}
+                  <span>Ghar Jane Ki Date & Time (Select Future Date/Time):</span>
                 </label>
                 <input
                   type="datetime-local"
                   value={departureDateTime}
-                  min={minDepartureDateTime} /* 👈 Past dates & hours blocked */
-                  onChange={(e) => setDepartureDateTime(e.target.value)}
-                  className="w-full bg-slate-950 border border-indigo-500/40 rounded-xl px-3 py-2 text-xs text-emerald-400 font-mono font-bold"
+                  min={currentMinDateTime} /* 👈 Past dates & hours blocked, future allowed */
+                  onChange={(e) => {
+                    setDepartureDateTime(e.target.value);
+                    if (returnDateTime && e.target.value > returnDateTime) {
+                      setReturnDateTime('');
+                      setHomeReturnDay('');
+                    }
+                  }}
+                  className="w-full bg-slate-950 border border-indigo-500/40 rounded-xl px-3 py-2 text-xs text-white font-mono"
                   required
                 />
               </div>
 
-              {/* 🟢 RETURN DATE & TIME PICKER (MIN = DEPARTURE TIME) */}
+              {/* 🟢 RETURN DATE & TIME (MIN = DEPARTURE TIME) */}
               {passCategory === 'Outstation Vacation' ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-950 border border-slate-800 rounded-xl">
                   <div>
@@ -811,7 +827,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                     <input
                       type="datetime-local"
                       value={returnDateTime}
-                      min={departureDateTime || minDepartureDateTime} /* 👈 Starts after departure */
+                      min={departureDateTime || currentMinDateTime} /* 👈 Must be after departure */
                       onChange={(e) => handleReturnDateTimeChange(e.target.value)}
                       className="w-full bg-slate-900 border border-rose-500/40 rounded-xl px-3 py-1.5 text-xs text-white font-mono"
                       required
