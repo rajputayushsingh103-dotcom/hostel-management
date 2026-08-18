@@ -4,7 +4,7 @@ import {
   Send,
   CheckCircle2,
   Clock,
-  Calendar,
+  Calendar as CalendarIcon,
   Phone,
   User,
   Plus,
@@ -19,7 +19,9 @@ import {
   Trash2,
   X,
   Sparkles,
-  MapPin
+  MapPin,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { HomeLeavePass, LeaveStatus, PassCategory, Role, UserAuthSession, OutingRulesConfig, GymMemberRecord, BlockName } from '../types';
 
@@ -84,10 +86,24 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   const [passCategory, setPassCategory] = useState<PassCategory>('Local Outing');
   const [destination, setDestination] = useState('');
 
-  // 🟢 Dynamic Datetime Strings (YYYY-MM-DDTHH:mm)
-  const [departureDateTime, setDepartureDateTime] = useState('');
-  const [returnDateTime, setReturnDateTime] = useState('');
+  // 1. Local Outing Live Time
+  const [localLiveDateTime, setLocalLiveDateTime] = useState('');
+
+  // 2. Home Leave Form Data
+  const [depDate, setDepDate] = useState('');
+  const [depTime, setDepTime] = useState('10:00 AM');
+  const [retDate, setRetDate] = useState('');
+  const [retTime, setRetTime] = useState('08:00 PM');
   const [homeReturnDay, setHomeReturnDay] = useState('');
+
+  // 🟢 Visual Calendar Modal States
+  const [activePickerTarget, setActivePickerTarget] = useState<'departure' | 'return' | null>(null);
+  const [calendarViewMonth, setCalendarViewMonth] = useState(new Date().getMonth());
+  const [calendarViewYear, setCalendarViewYear] = useState(new Date().getFullYear());
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState('');
+  const [selectedTimeHour, setSelectedTimeHour] = useState('10');
+  const [selectedTimeMinute, setSelectedTimeMinute] = useState('00');
+  const [selectedTimeAmPm, setSelectedTimeAmPm] = useState<'AM' | 'PM'>('AM');
 
   const [reasonOrAddress, setReasonOrAddress] = useState('');
   const [parentPhone, setParentPhone] = useState(userSession.parentPhone || '+91 98123 45678');
@@ -107,53 +123,68 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
 
   const now = new Date();
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const todayDayName = dayNames[now.getDay()];
 
-  // Helper to format Date to input datetime-local format: "YYYY-MM-DDTHH:mm"
-  const formatDateTimeLocal = (dateObj: Date) => {
-    const year = dateObj.getFullYear();
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    const hours = String(dateObj.getHours()).padStart(2, '0');
-    const minutes = String(dateObj.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  const getLiveDateAndTimeString = () => {
+    const d = new Date();
+    const datePart = d.toISOString().split('T')[0];
+    const timePart = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    return `${datePart} (${dayNames[d.getDay()]}) ${timePart}`;
   };
-
-  // Current Min Timestamp for Departure (No Past Dates or Past Hours)
-  const minDepartureDateTime = formatDateTimeLocal(now);
 
   useEffect(() => {
     if (showApplyModal) {
-      const currentFormatted = formatDateTimeLocal(new Date());
-      setDepartureDateTime(currentFormatted);
-
-      // Default return: 2 days later
-      const defaultReturn = new Date();
-      defaultReturn.setDate(defaultReturn.getDate() + 2);
-      defaultReturn.setHours(20, 0, 0, 0); // 8:00 PM
-      const returnFormatted = formatDateTimeLocal(defaultReturn);
-      setReturnDateTime(returnFormatted);
-      setHomeReturnDay(dayNames[defaultReturn.getDay()]);
+      setLocalLiveDateTime(getLiveDateAndTimeString());
+      setDepDate('');
+      setDepTime('10:00 AM');
+      setRetDate('');
+      setRetTime('08:00 PM');
+      setHomeReturnDay('');
+      setDestination('');
+      setReasonOrAddress('');
+      setFormError('');
     }
   }, [showApplyModal]);
 
-  // Handle Return Date Time Change
-  const handleReturnDateTimeChange = (val: string) => {
-    setReturnDateTime(val);
-    if (val) {
-      const selected = new Date(val);
-      if (!isNaN(selected.getTime())) {
-        setHomeReturnDay(dayNames[selected.getDay()]);
-      }
-    } else {
-      setHomeReturnDay('');
-    }
+  // Open Calendar Picker
+  const handleOpenCalendar = (target: 'departure' | 'return') => {
+    setActivePickerTarget(target);
+    const baseDate = target === 'return' && retDate ? new Date(retDate) : (depDate ? new Date(depDate) : new Date());
+    setCalendarViewMonth(baseDate.getMonth());
+    setCalendarViewYear(baseDate.getFullYear());
+    setSelectedCalendarDate(target === 'departure' ? depDate : retDate);
   };
 
-  // Check Application Window for Local Outing
+  // Confirm Selection from Calendar
+  const handleConfirmCalendarDateTime = () => {
+    if (!selectedCalendarDate) {
+      alert('Kripya calendar se date select karein!');
+      return;
+    }
+
+    const formattedTime = `${selectedTimeHour}:${selectedTimeMinute} ${selectedTimeAmPm}`;
+
+    if (activePickerTarget === 'departure') {
+      setDepDate(selectedCalendarDate);
+      setDepTime(formattedTime);
+    } else {
+      setRetDate(selectedCalendarDate);
+      setRetTime(formattedTime);
+      const selectedObj = new Date(selectedCalendarDate);
+      setHomeReturnDay(dayNames[selectedObj.getDay()]);
+    }
+    setActivePickerTarget(null);
+  };
+
+  // Calendar Helper Functions
+  const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
+  // Application Window check for Local Outing
   const checkApplicationWindow = (category: PassCategory) => {
     if (category === 'Outstation Vacation') {
-      return { isOpen: true, message: '✈️ Home / Night Stay Leave: Open 24x7. Select future departure date & time.' };
+      return { isOpen: true, message: '✈️ Home / Night Stay Leave: Open 24x7. Use calendar to choose your dates.' };
     }
 
     const currentHour = now.getHours();
@@ -250,35 +281,41 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
       return;
     }
 
-    // Departure Validation
-    const selectedDeparture = new Date(departureDateTime);
-    if (selectedDeparture < now) {
-      setFormError('⚠️ Beete hue purane time ya date par pass apply nahi kar sakte!');
-      return;
-    }
+    let finalDepartureStr = '';
+    let finalReturnStr = '';
+    let finalReason = '';
 
-    // Return Validation for Home Leave
-    if (passCategory === 'Outstation Vacation') {
-      const selectedReturn = new Date(returnDateTime);
-      if (selectedReturn <= selectedDeparture) {
-        setFormError('⚠️ Wapas aane ki date/time hamesha Ghar jane ke samay ke baad ki honi chahiye!');
+    if (passCategory === 'Local Outing') {
+      finalDepartureStr = localLiveDateTime || getLiveDateAndTimeString();
+      finalReturnStr = 'Today strictly before 08:00 PM';
+      finalReason = reasonOrAddress.trim() || 'General Local Outing';
+    } else {
+      if (!depDate) {
+        setFormError('Kripya Calendar se Ghar jane ki Date & Time select karein!');
         return;
       }
+
+      if (!retDate) {
+        setFormError('Kripya Calendar se Wapas aane ki Date & Time select karein!');
+        return;
+      }
+
+      if (retDate < depDate) {
+        setFormError('⚠️ Wapas aane ki date Ghar jane ki date ke baad ki honi chahiye!');
+        return;
+      }
+
       if (!reasonOrAddress.trim()) {
-        setFormError('⚠️ Home Leave ke liye "Address Without College" bharna anivarya (mandatory) hai!');
+        setFormError('⚠️ Home Leave ke liye "Address Without College" bharna anivarya hai!');
         return;
       }
+
+      const depObj = new Date(depDate);
+      const retObj = new Date(retDate);
+      finalDepartureStr = `${depDate} (${dayNames[depObj.getDay()]}) ${depTime}`;
+      finalReturnStr = `${retDate} (${homeReturnDay || dayNames[retObj.getDay()]}) ${retTime}`;
+      finalReason = `Address: ${reasonOrAddress.trim()} (Return: ${homeReturnDay || dayNames[retObj.getDay()]})`;
     }
-
-    // Display formatted strings
-    const departureDisplayStr = `${selectedDeparture.toLocaleDateString()} (${dayNames[selectedDeparture.getDay()]}) ${selectedDeparture.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    const returnDisplayStr = passCategory === 'Outstation Vacation'
-      ? `${new Date(returnDateTime).toLocaleDateString()} (${homeReturnDay}) ${new Date(returnDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-      : 'Today strictly before 08:00 PM';
-
-    const finalReason = passCategory === 'Outstation Vacation'
-      ? `Address: ${reasonOrAddress.trim()} (Return: ${homeReturnDay})`
-      : (reasonOrAddress.trim() || 'General Local Outing');
 
     onApplyLeavePass({
       studentId: userSession.studentId || 'std-101',
@@ -289,8 +326,8 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
       studentPhone: studentPhone,
       parentPhone: parentPhone,
       destination: destination.trim(),
-      departureDate: departureDisplayStr,
-      expectedReturnDate: returnDisplayStr,
+      departureDate: finalDepartureStr,
+      expectedReturnDate: finalReturnStr,
       reason: finalReason,
       passCategory: passCategory,
       year: studentYear,
@@ -536,170 +573,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
         )}
       </div>
 
-      {/* WARDEN GYM ROSTER MODAL */}
-      {showGymRegistryModal && role === 'warden' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-xs">
-          <div className="bg-slate-900 border border-amber-500/40 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Dumbbell className="w-5 h-5 text-amber-400" />
-                <h3 className="text-base font-bold text-white">Warden Gym Membership & Shift Setup</h3>
-              </div>
-              <button onClick={() => setShowGymRegistryModal(false)} className="text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddGymMember} className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
-              <h4 className="text-xs font-bold text-amber-300 uppercase">Set Fixed Gym Shift for Student</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-                <input
-                  type="text"
-                  placeholder="Student Name"
-                  value={gymStudentName}
-                  onChange={(e) => setGymStudentName(e.target.value)}
-                  className="bg-slate-900 border border-slate-800 rounded-xl p-2 text-white"
-                  required
-                />
-                <input
-                  type="text"
-                  placeholder="Roll No (e.g. 2024CS101)"
-                  value={gymStudentRoll}
-                  onChange={(e) => setGymStudentRoll(e.target.value)}
-                  className="bg-slate-900 border border-slate-800 rounded-xl p-2 text-white font-mono"
-                  required
-                />
-                <input
-                  type="text"
-                  placeholder="Room No (e.g. Tagore-101)"
-                  value={gymStudentRoom}
-                  onChange={(e) => setGymStudentRoom(e.target.value)}
-                  className="bg-slate-900 border border-slate-800 rounded-xl p-2 text-white"
-                  required
-                />
-                <select
-                  value={gymBlock}
-                  onChange={(e) => setGymBlock(e.target.value as BlockName)}
-                  className="bg-slate-900 border border-slate-800 rounded-xl p-2 text-white"
-                >
-                  <option value="Tagore">Tagore Block</option>
-                  <option value="Tilak">Tilak Block</option>
-                  <option value="Subhash">Subhash Block</option>
-                </select>
-                <select
-                  value={gymYear}
-                  onChange={(e) => setGymYear(Number(e.target.value))}
-                  className="bg-slate-900 border border-slate-800 rounded-xl p-2 text-white"
-                >
-                  <option value={1}>1st Year</option>
-                  <option value={2}>2nd Year</option>
-                  <option value={3}>3rd Year</option>
-                  <option value={4}>4th Year</option>
-                </select>
-
-                <select
-                  value={gymShiftTime}
-                  onChange={(e) => setGymShiftTime(e.target.value)}
-                  className="bg-slate-900 border border-amber-500/50 rounded-xl p-2 text-amber-300 font-bold"
-                >
-                  <option value="06:00 AM - 07:30 AM">Morning: 06:00 AM - 07:30 AM</option>
-                  <option value="05:00 PM - 07:00 PM">Evening: 05:00 PM - 07:00 PM</option>
-                  <option value="06:00 PM - 07:45 PM">Evening: 06:00 PM - 07:45 PM</option>
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg flex items-center justify-center gap-2"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>Issue Permanent Daily Gym Gate Pass</span>
-              </button>
-            </form>
-
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-slate-300">Active Gym Members ({gymMembers.length}):</h4>
-              <div className="space-y-1.5 max-h-60 overflow-y-auto">
-                {gymMembers.map((g) => (
-                  <div key={g.id} className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
-                    <div>
-                      <p className="font-bold text-white">{g.studentName} ({g.rollNo})</p>
-                      <p className="text-slate-400 text-[11px]">
-                        {g.roomNumber} • {g.year} Year • Shift: <span className="text-amber-300 font-bold">{g.gymShift}</span>
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveGymMember(g.id)}
-                      className="p-1.5 text-rose-400 hover:bg-rose-950/40 rounded-lg border border-rose-500/30"
-                      title="Revoke Gym Pass"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* QR PASS MODAL */}
-      {viewDigitalPass && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
-          <div className="bg-slate-900 border-2 border-emerald-500/60 rounded-3xl max-w-md w-full p-6 shadow-2xl relative overflow-hidden space-y-4">
-            <div className="absolute top-0 right-0 bg-emerald-500 text-slate-950 font-black text-[10px] px-3 py-1 rounded-bl-2xl uppercase tracking-widest">
-              OFFICIAL WARDEN SEAL
-            </div>
-
-            <div className="text-center space-y-1 pt-2">
-              <div className="w-12 h-12 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto">
-                {viewDigitalPass.isGymPass ? <Dumbbell className="w-7 h-7 text-amber-400" /> : <ShieldCheck className="w-7 h-7" />}
-              </div>
-              <h3 className="text-lg font-extrabold text-white">
-                {viewDigitalPass.isGymPass ? 'Permanent Daily Gym Pass' : 'Hostel Gate Pass'}
-              </h3>
-              <p className="text-xs font-mono text-emerald-400 font-bold bg-emerald-500/10 py-1 px-3 rounded-xl border border-emerald-500/20 inline-block">
-                {viewDigitalPass.verificationToken || 'WDN-SEAL-AUTHENTICATED'}
-              </p>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border-4 border-slate-800 text-center space-y-2 max-w-[220px] mx-auto shadow-inner">
-              <QrCode className="w-36 h-36 mx-auto text-slate-950" />
-              <p className="text-[10px] font-mono text-slate-800 font-bold">
-                {viewDigitalPass.rollNo} • {viewDigitalPass.isGymPass ? 'DAILY RECURRING' : 'SINGLE USE'}
-              </p>
-            </div>
-
-            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs">
-              <div className="flex justify-between border-b border-slate-800/80 pb-1.5">
-                <span className="text-slate-400">Student Name:</span>
-                <span className="font-bold text-white">{viewDigitalPass.studentName}</span>
-              </div>
-              <div className="flex justify-between border-b border-slate-800/80 pb-1.5">
-                <span className="text-slate-400">Roll & Room:</span>
-                <span className="font-bold text-white">{viewDigitalPass.rollNo} ({viewDigitalPass.roomNumber})</span>
-              </div>
-              <div className="flex justify-between border-b border-slate-800/80 pb-1.5">
-                <span className="text-slate-400">Shift / Window:</span>
-                <span className="font-bold text-emerald-300 font-mono">{viewDigitalPass.departureDate} - {viewDigitalPass.expectedReturnDate}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Address / Reason:</span>
-                <span className="font-bold text-amber-300 text-right truncate max-w-[200px]">{viewDigitalPass.reason}</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setViewDigitalPass(null)}
-              className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold"
-            >
-              Close Pass
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 🟢 APPLY PASS MODAL (DYNAMIC DEPARTURE & RETURN DATETIME CONTROLS) */}
+      {/* 🟢 APPLY PASS MODAL WITH INTERACTIVE CALENDAR BUTTONS */}
       {showApplyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
@@ -758,7 +632,12 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                     <button
                       type="button"
                       key={cat}
-                      onClick={() => setPassCategory(cat)}
+                      onClick={() => {
+                        setPassCategory(cat);
+                        setDepDate('');
+                        setRetDate('');
+                        setHomeReturnDay('');
+                      }}
                       className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
                         passCategory === cat
                           ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold'
@@ -785,63 +664,87 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 />
               </div>
 
-              {/* 🟢 DEPARTURE DATE & TIME PICKER (PAST TIME & DATES BLOCKED) */}
-              <div>
-                <label className="block text-xs font-semibold text-indigo-400 mb-1 flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-                  {passCategory === 'Outstation Vacation' ? 'Ghar Jane Ki Date & Time (Select Future Date/Time):' : 'Departure Time (Current):'}
-                </label>
-                <input
-                  type="datetime-local"
-                  value={departureDateTime}
-                  min={minDepartureDateTime} /* 👈 Past dates & hours blocked */
-                  onChange={(e) => setDepartureDateTime(e.target.value)}
-                  className="w-full bg-slate-950 border border-indigo-500/40 rounded-xl px-3 py-2 text-xs text-emerald-400 font-mono font-bold"
-                  required
-                />
-              </div>
-
-              {/* 🟢 RETURN DATE & TIME PICKER (MIN = DEPARTURE TIME) */}
-              {passCategory === 'Outstation Vacation' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-950 border border-slate-800 rounded-xl">
+              {/* 🟢 1. IF LOCAL OUTING: AUTO-FETCHED TIME & 8:00 PM LIMIT */}
+              {passCategory === 'Local Outing' ? (
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-rose-400 mb-1">
-                      Wapas Aane Ki Date & Time:
+                    <label className="block text-xs font-semibold text-indigo-400 mb-1 flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-indigo-400" />
+                      Departure Time (Auto Live IST):
                     </label>
                     <input
-                      type="datetime-local"
-                      value={returnDateTime}
-                      min={departureDateTime || minDepartureDateTime} /* 👈 Starts after departure */
-                      onChange={(e) => handleReturnDateTimeChange(e.target.value)}
-                      className="w-full bg-slate-900 border border-rose-500/40 rounded-xl px-3 py-1.5 text-xs text-white font-mono"
-                      required
+                      type="text"
+                      value={localLiveDateTime || getLiveDateAndTimeString()}
+                      disabled
+                      className="w-full bg-slate-950/80 border border-indigo-500/40 rounded-xl px-3 py-2 text-xs text-emerald-400 font-mono font-bold cursor-not-allowed"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-amber-300 mb-1">
-                      Wapas Aane Ka Din (Auto):
+                    <label className="block text-xs font-semibold text-rose-400 mb-1 flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-rose-400" />
+                      Return Cutoff:
                     </label>
                     <input
                       type="text"
-                      value={homeReturnDay ? `${homeReturnDay}` : 'Select Return Time'}
+                      value="Today before 08:00 PM"
                       disabled
-                      className="w-full bg-slate-900/80 border border-amber-500/40 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-bold cursor-not-allowed"
+                      className="w-full bg-slate-950/80 border border-rose-500/40 rounded-xl px-3 py-2 text-xs text-rose-300 font-mono font-bold cursor-not-allowed"
                     />
                   </div>
                 </div>
               ) : (
-                <div>
-                  <label className="block text-xs font-semibold text-rose-400 mb-1 flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-rose-400" />
-                    Return Time Limit:
-                  </label>
-                  <input
-                    type="text"
-                    value="Today strictly before 08:00 PM"
-                    disabled
-                    className="w-full bg-slate-950/80 border border-rose-500/40 rounded-xl px-3 py-2 text-xs text-rose-300 font-mono font-bold cursor-not-allowed"
-                  />
+                /* 🟢 2. IF HOME LEAVE: VISUAL CALENDAR SELECTION BUTTONS */
+                <div className="space-y-3">
+                  {/* Ghar Jane Ki Date Button with Calendar Icon */}
+                  <div>
+                    <label className="block text-xs font-semibold text-indigo-400 mb-1 flex items-center gap-1">
+                      <CalendarIcon className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Ghar Jane Ki Date & Time (Calendar se Choose karein):</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCalendar('departure')}
+                      className="w-full bg-slate-950 hover:bg-slate-900 border border-indigo-500/50 rounded-xl px-4 py-2.5 text-xs text-left text-white flex items-center justify-between shadow-sm transition-all"
+                    >
+                      <span className={depDate ? 'font-bold text-emerald-400' : 'text-slate-500'}>
+                        {depDate ? `📅 ${depDate} @ ${depTime}` : '📅 Click to open Calendar & Select Date/Time'}
+                      </span>
+                      <CalendarIcon className="w-4 h-4 text-indigo-400 shrink-0" />
+                    </button>
+                  </div>
+
+                  {/* Wapas Aane Ki Date Button with Calendar Icon */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                    <div>
+                      <label className="block text-xs font-bold text-rose-400 mb-1">
+                        Wapas Aane Ki Date & Time:
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCalendar('return')}
+                        className="w-full bg-slate-900 hover:bg-slate-800 border border-rose-500/50 rounded-xl px-3 py-2 text-xs text-left text-white flex items-center justify-between shadow-sm"
+                      >
+                        <span className={retDate ? 'font-bold text-rose-300' : 'text-slate-500'}>
+                          {retDate ? `📅 ${retDate} @ ${retTime}` : '📅 Select Return'}
+                        </span>
+                        <CalendarIcon className="w-3.5 h-3.5 text-rose-400" />
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-amber-300 mb-1">
+                        Wapas Aane Ka Din (Auto):
+                      </label>
+                      <input
+                        type="text"
+                        value={homeReturnDay ? `${homeReturnDay}` : 'Auto-Calculated'}
+                        disabled
+                        className="w-full bg-slate-900/80 border border-amber-500/40 rounded-xl px-3 py-2 text-xs text-amber-300 font-bold cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -892,6 +795,150 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🟢 3. INTERACTIVE VISUAL CALENDAR & TIME PICKER MODAL POPUP */}
+      {activePickerTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
+          <div className="bg-slate-900 border-2 border-indigo-500/60 rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                <CalendarIcon className="w-4 h-4 text-indigo-400" />
+                <span>{activePickerTarget === 'departure' ? 'Select Ghar Jane Ki Date' : 'Select Wapas Aane Ki Date'}</span>
+              </h4>
+              <button onClick={() => setActivePickerTarget(null)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Month & Year Navigation */}
+            <div className="flex items-center justify-between bg-slate-950 p-2 rounded-xl border border-slate-800 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  if (calendarViewMonth === 0) {
+                    setCalendarViewMonth(11);
+                    setCalendarViewYear(calendarViewYear - 1);
+                  } else {
+                    setCalendarViewMonth(calendarViewMonth - 1);
+                  }
+                }}
+                className="p-1 text-slate-400 hover:text-white"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <span className="font-bold text-indigo-300">
+                {monthNames[calendarViewMonth]} {calendarViewYear}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (calendarViewMonth === 11) {
+                    setCalendarViewMonth(0);
+                    setCalendarViewYear(calendarViewYear + 1);
+                  } else {
+                    setCalendarViewMonth(calendarViewMonth + 1);
+                  }
+                }}
+                className="p-1 text-slate-400 hover:text-white"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Calendar Days Grid */}
+            <div>
+              <div className="grid grid-cols-7 text-center text-[10px] font-bold text-slate-500 mb-1">
+                <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1 text-xs">
+                {Array.from({ length: firstDayOfMonth(calendarViewYear, calendarViewMonth) }).map((_, i) => (
+                  <div key={`empty-${i}`} />
+                ))}
+
+                {Array.from({ length: daysInMonth(calendarViewYear, calendarViewMonth) }).map((_, i) => {
+                  const dayNum = i + 1;
+                  const dateStr = `${calendarViewYear}-${String(calendarViewMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                  const cellDate = new Date(calendarViewYear, calendarViewMonth, dayNum, 23, 59, 59);
+                  const isPast = cellDate < now;
+                  const isSelected = selectedCalendarDate === dateStr;
+
+                  return (
+                    <button
+                      type="button"
+                      key={dayNum}
+                      disabled={isPast}
+                      onClick={() => setSelectedCalendarDate(dateStr)}
+                      className={`h-8 rounded-lg font-bold text-xs flex items-center justify-center transition-all ${
+                        isPast
+                          ? 'text-slate-700 cursor-not-allowed'
+                          : isSelected
+                          ? 'bg-indigo-600 text-white font-extrabold shadow-md'
+                          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      }`}
+                    >
+                      {dayNum}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Time Picker Controls */}
+            <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800 space-y-1.5">
+              <span className="text-[11px] font-bold text-amber-300 block">Select Time:</span>
+              <div className="flex items-center justify-center gap-2 text-xs">
+                <select
+                  value={selectedTimeHour}
+                  onChange={(e) => setSelectedTimeHour(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-white font-mono font-bold"
+                >
+                  {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+                <span className="text-white font-bold">:</span>
+                <select
+                  value={selectedTimeMinute}
+                  onChange={(e) => setSelectedTimeMinute(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-white font-mono font-bold"
+                >
+                  {['00', '15', '30', '45'].map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+                <select
+                  value={selectedTimeAmPm}
+                  onChange={(e) => setSelectedTimeAmPm(e.target.value as 'AM' | 'PM')}
+                  className="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-indigo-400 font-bold"
+                >
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setActivePickerTarget(null)}
+                className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCalendarDateTime}
+                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md"
+              >
+                Done & Set Date
+              </button>
+            </div>
           </div>
         </div>
       )}
