@@ -109,6 +109,13 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const todayDayName = dayNames[now.getDay()];
 
+  // 🟢 MINIMUM DATES CALCULATION (Past dates blocked + Tomorrow min for return)
+  const todayDateStr = now.toISOString().split('T')[0]; // e.g. "2026-08-04"
+  
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowDateStr = tomorrow.toISOString().split('T')[0]; // e.g. "2026-08-05"
+
   const getLiveDateAndTimeString = () => {
     const d = new Date();
     const datePart = d.toISOString().split('T')[0];
@@ -119,11 +126,10 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   useEffect(() => {
     if (showApplyModal) {
       setDepartureDate(getLiveDateAndTimeString());
-      const nextDate = new Date();
-      nextDate.setDate(nextDate.getDate() + 2);
-      const nextDateStr = nextDate.toISOString().split('T')[0];
-      setHomeReturnDate(nextDateStr);
-      setHomeReturnDay(dayNames[nextDate.getDay()]);
+      
+      // Default return date set to tomorrow
+      setHomeReturnDate(tomorrowDateStr);
+      setHomeReturnDay(dayNames[tomorrow.getDay()]);
     }
   }, [showApplyModal]);
 
@@ -238,10 +244,19 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
       return;
     }
 
-    // 🟢 Address is MANDATORY only for Home Leave; Optional for Local Outing
-    if (passCategory === 'Outstation Vacation' && !reasonOrAddress.trim()) {
-      setFormError('⚠️ Home Leave ke liye "Address Without College" bharna anivarya (mandatory) hai!');
-      return;
+    if (passCategory === 'Outstation Vacation') {
+      if (!homeReturnDate) {
+        setFormError('Kripya wapas aane ki date select karein!');
+        return;
+      }
+      if (homeReturnDate < tomorrowDateStr) {
+        setFormError('⚠️ Return date kam se kam kal (agla din) ya uske aage ki honi chahiye!');
+        return;
+      }
+      if (!reasonOrAddress.trim()) {
+        setFormError('⚠️ Home Leave ke liye "Address Without College" bharna anivarya (mandatory) hai!');
+        return;
+      }
     }
 
     const calculatedReturnStr = passCategory === 'Outstation Vacation'
@@ -671,7 +686,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
         </div>
       )}
 
-      {/* 🟢 APPLY PASS MODAL */}
+      {/* 🟢 APPLY PASS MODAL (PAST DATES BLOCKED + MINIMUM TOMORROW FOR RETURN) */}
       {showApplyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
@@ -770,6 +785,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 />
               </div>
 
+              {/* 🟢 RETURN DATE WITH MIN={TOMORROW} AND AUTO RETURN DAY */}
               {passCategory === 'Outstation Vacation' ? (
                 <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950 border border-slate-800 rounded-xl">
                   <div>
@@ -779,6 +795,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                     <input
                       type="date"
                       value={homeReturnDate}
+                      min={tomorrowDateStr} /* 👈 Past dates & Today are blocked, starts from tomorrow */
                       onChange={(e) => handleReturnDateChange(e.target.value)}
                       className="w-full bg-slate-900 border border-rose-500/40 rounded-xl px-3 py-1.5 text-xs text-white font-mono"
                       required
@@ -812,7 +829,6 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 </div>
               )}
 
-              {/* 🟢 REASON (OPTIONAL FOR LOCAL OUTING) / ADDRESS (MANDATORY FOR HOME LEAVE) */}
               <div>
                 <label className="block text-xs font-bold text-amber-300 mb-1 flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5 text-amber-400" />
