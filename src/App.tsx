@@ -1,8 +1,4 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
+// src/App.tsx
 import React, { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
 import { LoginPage } from './components/LoginPage';
@@ -46,7 +42,6 @@ import {
 } from './types';
 
 export default function App() {
-  // Authentication & Session State
   const [userSession, setUserSession] = useState<UserAuthSession | null>(() => {
     const saved = localStorage.getItem('hostel_user_session');
     if (saved) {
@@ -113,7 +108,6 @@ export default function App() {
 
   const [activeMedia, setActiveMedia] = useState<ComplaintMedia | null>(null);
 
-  // Sync to localStorage
   useEffect(() => {
     if (userSession) {
       localStorage.setItem('hostel_user_session', JSON.stringify(userSession));
@@ -162,26 +156,18 @@ export default function App() {
     localStorage.setItem('hostel_outing_rules', JSON.stringify(outingRules));
   }, [outingRules]);
 
-  // 🟢 100% AUTOMATIC ATTENDANCE MISSED CRON SCANNER
+  // AUTOMATED MISSED ATTENDANCE CRON
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
-      const hours = now.getHours();
-      const minutes = now.getMinutes();
-      const currentTimeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
       const todayDateStr = now.toISOString().split('T')[0];
 
-      // Scan all missers who are not on home leave
       attendanceSummaries.forEach((student) => {
         const studentYear = (student.studentId.includes('101') || student.studentId.includes('102')) ? 1 : (student.studentId.includes('201') ? 2 : 3);
-        const cutoffTime = studentYear === 1 ? timingConfig.firstYearBiometricCutoff : timingConfig.seniorYearsBiometricCutoff;
-
-        // Check if student missed and cutoff time reached
         const isMissed = student.missedDates.length > 0;
         const isOnLeave = student.leaveCount > 0;
 
         if (isMissed && !isOnLeave) {
-          // Check if already posted to group today
           const alreadyPosted = yearGroupMessages.some(
             (m) => m.flaggedStudentRoll === student.rollNo && m.timestamp.includes(todayDateStr)
           );
@@ -204,7 +190,7 @@ export default function App() {
           }
         }
       });
-    }, 60000); // Scans every 60 seconds
+    }, 60000);
 
     return () => clearInterval(interval);
   }, [attendanceSummaries, timingConfig, yearGroupMessages]);
@@ -527,7 +513,7 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'students' && (role === 'warden' || role === 'college_admin') && (
-          <StudentManager />
+          <StudentManager role={role} />
         )}
 
         {activeTab === 'leave' && (
@@ -556,7 +542,7 @@ export default function App() {
         {activeTab === 'rooms' && (
           <div className="space-y-8">
             {(role === 'warden' || role === 'college_admin') && (
-              <StudentManager />
+              <StudentManager role={role} />
             )}
 
             <RoomOccupancySection

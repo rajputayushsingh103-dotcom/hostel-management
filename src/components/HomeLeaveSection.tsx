@@ -1,34 +1,26 @@
-import React, { useState } from 'react';
+// src/components/HomeLeaveSection.tsx
+import React, { useState, useEffect } from 'react';
 import {
   Send,
-  MessageSquare,
   CheckCircle2,
   Clock,
-  AlertTriangle,
-  MapPin,
   Calendar,
   Phone,
   User,
-  ShieldAlert,
   Plus,
-  ArrowRight,
-  Sparkles,
-  Check,
   Building,
-  Radio,
   FileText,
   QrCode,
   ShieldCheck,
-  ShieldX,
   Lock,
-  Unlock,
   Dumbbell,
   Settings,
-  ArrowLeftRight,
-  UserCheck,
-  AlertCircle
+  AlertCircle,
+  Trash2,
+  X,
+  Sparkles
 } from 'lucide-react';
-import { HomeLeavePass, LeaveStatus, PassCategory, Role, UserAuthSession, OutingRulesConfig } from '../types';
+import { HomeLeavePass, LeaveStatus, PassCategory, Role, UserAuthSession, OutingRulesConfig, GymMemberRecord, BlockName } from '../types';
 
 interface HomeLeaveSectionProps {
   leavePasses: HomeLeavePass[];
@@ -40,6 +32,20 @@ interface HomeLeaveSectionProps {
   onUpdateOutingRules: (newRules: OutingRulesConfig) => void;
   onRecordGateScan: (id: string, action: 'EXITED' | 'RE_ENTERED', guardName?: string) => void;
 }
+
+const DEFAULT_GYM_MEMBERS: GymMemberRecord[] = [
+  {
+    id: 'gym-1',
+    studentName: 'Aayush Singh',
+    rollNo: '2024CS101',
+    roomNumber: 'Tagore-101',
+    block: 'Tagore',
+    year: 3,
+    gymShift: '05:00 PM - 07:00 PM',
+    assignedBy: 'Chief Warden Office',
+    validUntil: '2026-12-31'
+  }
+];
 
 export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   leavePasses,
@@ -54,78 +60,138 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [showGateTerminalModal, setShowGateTerminalModal] = useState(false);
   const [showRulesConfigModal, setShowRulesConfigModal] = useState(false);
+  const [showGymRegistryModal, setShowGymRegistryModal] = useState(false);
   const [viewDigitalPass, setViewDigitalPass] = useState<HomeLeavePass | null>(null);
 
-  // Form Fields
+  const [gymMembers, setGymMembers] = useState<GymMemberRecord[]>(() => {
+    const saved = localStorage.getItem('hostel_gym_members');
+    return saved ? JSON.parse(saved) : DEFAULT_GYM_MEMBERS;
+  });
+
+  const [gymStudentName, setGymStudentName] = useState('');
+  const [gymStudentRoll, setGymStudentRoll] = useState('');
+  const [gymStudentRoom, setGymStudentRoom] = useState('');
+  const [gymBlock, setGymBlock] = useState<BlockName>('Tagore');
+  const [gymYear, setGymYear] = useState(1);
+  const [gymShiftTime, setGymShiftTime] = useState('05:00 PM - 07:00 PM');
+
+  useEffect(() => {
+    localStorage.setItem('hostel_gym_members', JSON.stringify(gymMembers));
+  }, [gymMembers]);
+
   const [passCategory, setPassCategory] = useState<PassCategory>('Local Outing');
   const [destination, setDestination] = useState('');
-  const [departureDate, setDepartureDate] = useState('05:00 PM');
+  const [departureDate, setDepartureDate] = useState('');
   const [returnDate, setReturnDate] = useState('08:00 PM');
   const [reason, setReason] = useState('');
   const [parentPhone, setParentPhone] = useState(userSession.parentPhone || '+91 98123 45678');
   const [studentPhone, setStudentPhone] = useState('+91 98765 43210');
-  const [isGymPass, setIsGymPass] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [formError, setFormError] = useState('');
 
-  // Gate Scanner Search State
   const [scanQuery, setScanQuery] = useState('');
   const [scannedPass, setScannedPass] = useState<HomeLeavePass | null>(null);
   const [scanMessage, setScanMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Temporary Rules State
-  const [tempRules, setTempRules] = useState<OutingRulesConfig>(outingRules);
-
   const studentYear = userSession.year || 1;
+  const currentStudentRoll = (userSession.rollNo || '').trim().toUpperCase();
 
-  // 🟢 Live Dynamic Day Calculation (Sunday, Wednesday etc.)
+  // Strict Gym Privacy
+  const studentGymRecord = gymMembers.find((g) => g.rollNo.trim().toUpperCase() === currentStudentRoll);
+  const isStudentGymMember = role === 'student' && !!studentGymRecord;
+
+  const now = new Date();
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const todayDayName = dayNames[new Date().getDay()]; // e.g. "Sunday", "Wednesday"
+  const todayDayName = dayNames[now.getDay()];
 
-  // 🟢 BUSINESS RULE ENGINE: Day-wise & Year-wise Eligibility Checker
-  const checkOutingEligibility = (category: PassCategory, gym: boolean) => {
-    // 1. Home Leave / Overnight Pass is always open (Warden approval needed)
+  const getLiveTimeString = () => {
+    return new Date().toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  useEffect(() => {
+    if (showApplyModal) {
+      setDepartureDate(getLiveTimeString());
+    }
+  }, [showApplyModal]);
+
+  const checkApplicationWindow = (category: PassCategory) => {
     if (category === 'Outstation Vacation') {
-      return { 
-        allowed: true, 
-        reason: '✈️ Home / Night Stay Leave: Requires Parent SMS & Warden Approval. Overnight stay outside permitted.' 
-      };
+      return { isOpen: true, message: '✈️ Home / Night Stay Leave: Open 24x7.' };
     }
 
-    // 2. Gym Members Exemption
-    if (gym) {
-      return { 
-        allowed: true, 
-        reason: '💪 Gym Outing: Allowed daily for all years (Return strictly before 8:00 PM).' 
-      };
-    }
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const totalMinutes = currentHour * 60 + currentMinute;
 
-    // 3. 1st Year Rule: Allowed ONLY on Wednesday & Sunday
-    if (studentYear === 1) {
-      if (todayDayName === 'Sunday' || todayDayName === 'Wednesday') {
+    const min430PM = 16 * 60 + 30; // 16:30
+    const max600PM = 18 * 60;      // 18:00
+    const min900AM = 9 * 60;       // 09:00
+    const max1200PM = 12 * 60;     // 12:00
+
+    if (todayDayName === 'Sunday') {
+      const isMorningSlot = totalMinutes >= min900AM && totalMinutes <= max1200PM;
+      const isEveningSlot = totalMinutes >= min430PM && totalMinutes <= max600PM;
+
+      if (isMorningSlot || isEveningSlot) {
         return {
-          allowed: true,
-          reason: `✅ 1st Year Outing Allowed: Today is ${todayDayName}. You can go out till 8:00 PM.`
+          isOpen: true,
+          message: `✅ Sunday Application Window Open (${isMorningSlot ? 'Morning 9 AM - 12 PM' : 'Evening 4:30 PM - 6:00 PM'})`
         };
       } else {
         return {
-          allowed: false,
-          reason: `🔒 1st Year Outing Locked: 1st Year students are allowed outing ONLY on Wednesday & Sunday. Today is ${todayDayName}. (Gym members exempt).`
+          isOpen: false,
+          message: '🔒 Sunday Portal Closed: Allowed only between (09:00 AM - 12:00 PM) and (04:30 PM - 06:00 PM).'
         };
       }
     }
 
-    // 4. 2nd, 3rd, 4th Year Rule: Allowed DAILY EXCEPT Wednesday
+    const isWeekdaySlot = totalMinutes >= min430PM && totalMinutes <= max600PM;
+    if (isWeekdaySlot) {
+      return {
+        isOpen: true,
+        message: '✅ Evening Outing Window Open (4:30 PM - 6:00 PM).'
+      };
+    } else {
+      return {
+        isOpen: false,
+        message: `🔒 Application Window Closed: Weekday window is strictly 04:30 PM to 06:00 PM. Current: ${getLiveTimeString()}.`
+      };
+    }
+  };
+
+  const checkOutingEligibility = (category: PassCategory) => {
+    if (category === 'Outstation Vacation') {
+      return { allowed: true, reason: '✈️ Home / Night Stay Leave: Requires Parent SMS & Warden Approval.' };
+    }
+
+    if (studentYear === 1) {
+      if (todayDayName === 'Sunday' || todayDayName === 'Wednesday') {
+        return {
+          allowed: true,
+          reason: `✅ 1st Year Outing Allowed: Today is ${todayDayName}. Return before 8:00 PM.`
+        };
+      } else {
+        return {
+          allowed: false,
+          reason: `🔒 1st Year Locked: Outings allowed strictly on Wednesday & Sunday. Today is ${todayDayName}.`
+        };
+      }
+    }
+
     if (studentYear >= 2) {
       if (todayDayName === 'Wednesday') {
         return {
           allowed: false,
-          reason: `🔒 Wednesday Senior Restriction: Outing is closed on Wednesday for 2nd, 3rd & 4th year students. (Gym members exempt).`
+          reason: '🔒 Wednesday Restriction: Senior outing closed on Wednesday.'
         };
       } else {
         return {
           allowed: true,
-          reason: `✅ Senior Outing Allowed: Today is ${todayDayName}. Return strictly before 8:00 PM curfew.`
+          reason: `✅ Senior Outing: Today is ${todayDayName}. Return strictly before 8:00 PM curfew.`
         };
       }
     }
@@ -133,26 +199,22 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
     return { allowed: true, reason: 'Allowed' };
   };
 
-  const currentEligibility = checkOutingEligibility(passCategory, isGymPass);
+  const currentWindow = checkApplicationWindow(passCategory);
+  const currentEligibility = checkOutingEligibility(passCategory);
+  const canSubmitPass = currentWindow.isOpen && currentEligibility.allowed;
 
-  // Form Submit Handler
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
 
-    if (!destination.trim() || !reason.trim() || !parentPhone.trim()) {
-      setFormError('Kripya saari details bharein.');
+    if (!canSubmitPass) {
+      setFormError('Application window closed or not eligible.');
       return;
     }
 
-    // 🟢 8:00 PM Return Rule Validation
-    if (passCategory === 'Local Outing' || passCategory === 'Gym Outing') {
-      const returnLower = returnDate.toLowerCase();
-      // Check if time is past 8:00 PM
-      if (returnLower.includes('09:') || returnLower.includes('10:') || returnLower.includes('11:') || returnLower.includes('12:')) {
-        setFormError('⚠️ Outing Pass sirf raat 8:00 PM tak valid hai. 8:00 PM ke baad ke liye "Outstation Vacation / Home Leave" select karein.');
-        return;
-      }
+    if (!destination.trim() || !reason.trim() || !parentPhone.trim()) {
+      setFormError('Kripya saari details bharein.');
+      return;
     }
 
     onApplyLeavePass({
@@ -164,12 +226,12 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
       studentPhone: studentPhone,
       parentPhone: parentPhone,
       destination: destination,
-      departureDate: departureDate,
+      departureDate: getLiveTimeString(),
       expectedReturnDate: returnDate,
       reason: reason,
       passCategory: passCategory,
       year: studentYear,
-      isGymPass: isGymPass,
+      isGymPass: false,
       verificationToken: `WDN-SEAL-${Math.floor(1000 + Math.random() * 9000)}-AUTHENTICATED`
     });
 
@@ -179,45 +241,59 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
     setFormError('');
   };
 
-  // Gate Scanner Search
-  const handleSearchPassAtGate = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const query = scanQuery.trim().toLowerCase();
-    if (!query) return;
+  const handleAddGymMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!gymStudentName.trim() || !gymStudentRoll.trim()) return;
 
-    const match = leavePasses.find(
-      (p) =>
-        p.rollNo.toLowerCase() === query ||
-        p.studentName.toLowerCase().includes(query) ||
-        p.id.toLowerCase() === query ||
-        p.verificationToken?.toLowerCase() === query
-    );
+    const cleanRoll = gymStudentRoll.trim().toUpperCase();
 
-    if (match) {
-      setScannedPass(match);
-      if (match.status === 'Approved' || match.status === 'Departed') {
-        setScanMessage({
-          type: 'success',
-          text: `✅ OFFICIAL WARDEN SEAL VERIFIED! Student ${match.studentName} (${match.rollNo}) holds an authentic Warden Approved Gate Pass.`
-        });
-      } else {
-        setScanMessage({
-          type: 'error',
-          text: `⛔ EXIT REJECTED! Gate Pass status is "${match.status}". Not approved by Warden Office.`
-        });
-      }
-    } else {
-      setScannedPass(null);
-      setScanMessage({
-        type: 'error',
-        text: `⛔ NO RECORD FOUND! Roll No / Pass ID "${scanQuery}" does not exist in Warden Server Database.`
-      });
+    const newGymMember: GymMemberRecord = {
+      id: `gym-${Date.now()}`,
+      studentName: gymStudentName.trim(),
+      rollNo: cleanRoll,
+      roomNumber: gymStudentRoom.trim(),
+      block: gymBlock,
+      year: Number(gymYear),
+      gymShift: gymShiftTime,
+      assignedBy: 'Chief Warden Office',
+      validUntil: '2026-12-31'
+    };
+
+    setGymMembers([...gymMembers, newGymMember]);
+
+    onApplyLeavePass({
+      studentId: cleanRoll,
+      studentName: gymStudentName.trim(),
+      rollNo: cleanRoll,
+      block: gymBlock,
+      roomNumber: gymStudentRoom.trim(),
+      studentPhone: '+91 98765 43210',
+      parentPhone: '+91 98123 45678',
+      destination: 'Campus Fitness Gym',
+      departureDate: gymShiftTime.split('-')[0].trim(),
+      expectedReturnDate: gymShiftTime.split('-')[1]?.trim() || '08:00 PM',
+      reason: `Permanent Daily Gym Shift (${gymShiftTime})`,
+      passCategory: 'Local Outing',
+      year: Number(gymYear),
+      isGymPass: true,
+      verificationToken: `WDN-GYM-PERM-${cleanRoll}`
+    });
+
+    setGymStudentName('');
+    setGymStudentRoll('');
+    setGymStudentRoom('');
+    alert(`✅ Student ${newGymMember.studentName} (${cleanRoll}) registered for Gym Shift ${gymShiftTime}!`);
+  };
+
+  const handleRemoveGymMember = (id: string) => {
+    if (window.confirm('Remove this student from Gym Roster?')) {
+      setGymMembers(gymMembers.filter((g) => g.id !== id));
     }
   };
 
   const filteredPasses = leavePasses.filter((p) => {
     if (role === 'student') {
-      return p.studentId === userSession.studentId || p.rollNo === userSession.rollNo;
+      return p.studentId === userSession.studentId || p.rollNo.trim().toUpperCase() === currentStudentRoll;
     }
     if (filterStatus === 'All') return true;
     return p.status === filterStatus;
@@ -227,10 +303,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
-
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div>
             <div className="flex items-center gap-2">
@@ -241,11 +314,11 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
                   Gate Pass Security & Outing Terminal
                   <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                    8:00 PM CURFEW ENFORCED
+                    LIVE IST TIMED
                   </span>
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-                  Today is <strong className="text-indigo-400 font-bold">{todayDayName}</strong> • 1st Year (Wed & Sun) • 2nd/3rd/4th Year (Daily except Wed)
+                  Today: <strong className="text-indigo-400 font-bold">{todayDayName}</strong> • Weekdays: <strong>4:30 PM - 6:00 PM</strong> | Sunday: <strong>9 AM-12 PM & 4:30-6 PM</strong>
                 </p>
               </div>
             </div>
@@ -255,294 +328,308 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
             {role === 'warden' && (
               <>
                 <button
-                  onClick={() => setShowRulesConfigModal(true)}
-                  className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+                  onClick={() => setShowGymRegistryModal(true)}
+                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-all"
                 >
-                  <Settings className="w-4 h-4 text-amber-400" />
-                  <span>Outing Rules Config</span>
+                  <Dumbbell className="w-4 h-4" />
+                  <span>Gym Roster ({gymMembers.length})</span>
                 </button>
 
                 <button
                   onClick={() => setShowGateTerminalModal(true)}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-indigo-600/20 transition-all"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all"
                 >
                   <QrCode className="w-4 h-4" />
-                  <span>Gate Security Scanner</span>
+                  <span>Gate Scanner</span>
                 </button>
               </>
             )}
 
             {role === 'student' && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowGateTerminalModal(true)}
-                  className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
-                >
-                  <QrCode className="w-4 h-4 text-indigo-400" />
-                  <span>Gate Checkpoint Scanner</span>
-                </button>
-
-                <button
-                  onClick={() => setShowApplyModal(true)}
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Apply Outing / Gate Pass</span>
-                </button>
-              </div>
+              <button
+                onClick={() => setShowApplyModal(true)}
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Apply Outing Pass</span>
+              </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Outing Rules Policy Summary Banner */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Rule 1: 1st Year Students */}
-        <div className="bg-slate-900/90 border border-indigo-500/30 rounded-2xl p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-              <Lock className="w-4 h-4 text-indigo-400" />
-              1st Year Outing Policy
-            </span>
-            <span className="text-[10px] font-bold bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-md border border-indigo-500/30">
-              Wed & Sun Only
-            </span>
-          </div>
-          <p className="text-xs text-slate-300">
-            Outing allowed strictly on <strong>Wednesday & Sunday</strong>. Must return to hostel before <strong className="text-indigo-300">8:00 PM sharp</strong>.
-          </p>
-          <div className="text-[11px] text-slate-400 bg-slate-950 p-2 rounded-xl border border-slate-800">
-            🔒 Mon, Tue, Thu, Fri, Sat outings are locked for 1st years.
-          </div>
-        </div>
-
-        {/* Rule 2: 2nd, 3rd, 4th Year Students */}
-        <div className="bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-emerald-400" />
-              2nd / 3rd / 4th Year Outing
-            </span>
-            <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-500/30">
-              Daily (Except Wednesday)
-            </span>
-          </div>
-          <p className="text-xs text-slate-300">
-            Daily outing allowed till <strong className="text-emerald-300">8:00 PM curfew</strong>, except on <strong className="text-amber-300">Wednesday</strong> (Restricted Day).
-          </p>
-          <div className="text-[11px] text-slate-400 bg-slate-950 p-2 rounded-xl border border-slate-800">
-            ⏰ 8:00 PM ke baad campus ke bahar rehne par fine lagega.
-          </div>
-        </div>
-
-        {/* Rule 3: Night Stay / Home Leave Rule */}
-        <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-              <Building className="w-4 h-4 text-amber-400" />
-              Overnight / Home Leave
-            </span>
-            <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-md border border-amber-500/30">
-              Night Stay Form
-            </span>
-          </div>
-          <p className="text-xs text-slate-300">
-            Agar <strong>8:00 PM ke baad</strong> bahar rehna hai ya <strong>ghar jana hai</strong>, toh "Outstation Vacation / Home Leave" form bharein.
-          </p>
-          <div className="text-[11px] text-slate-400 bg-slate-950 p-2 rounded-xl border border-slate-800">
-            📲 Requires Parent SMS confirmation and Warden approval.
-          </div>
-        </div>
-      </div>
-
-      {/* Filter Tabs for Warden */}
-      {role === 'warden' && (
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-3.5 rounded-2xl">
-          <div className="flex items-center gap-1 overflow-x-auto text-xs font-semibold">
-            {['All', 'Applied', 'Approved', 'Departed', 'Returned'].map((st) => (
-              <button
-                key={st}
-                onClick={() => setFilterStatus(st)}
-                className={`px-3.5 py-1.5 rounded-xl transition-all ${
-                  filterStatus === st
-                    ? 'bg-amber-500 text-slate-950 font-bold shadow-md'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                {st === 'All' ? 'All Gate Passes' : st}
-              </button>
-            ))}
-          </div>
-
+      {/* ISOLATED GYM BANNER */}
+      {isStudentGymMember && (
+        <div className="bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border-2 border-amber-500/60 rounded-3xl p-5 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="text-xs text-amber-300 font-bold bg-amber-500/10 px-2.5 py-1 rounded-xl border border-amber-500/20">
-              Currently Away: {outOfHostelCount} Students
-            </span>
+            <div className="p-3 bg-amber-500/20 text-amber-400 rounded-2xl border border-amber-500/30">
+              <Dumbbell className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-md uppercase border border-amber-500/30">
+                Warden Approved Permanent Gym Pass
+              </span>
+              <h3 className="text-base font-extrabold text-white mt-1">
+                Your Fixed Gym Shift: <span className="text-amber-300 font-mono">{studentGymRecord?.gymShift}</span>
+              </h3>
+              <p className="text-xs text-slate-300">
+                Aapko daily outing pass apply karne ki zaroorat nahi hai. Gate par QR scan karein.
+              </p>
+            </div>
           </div>
+
+          <button
+            onClick={() => {
+              const gymPassObj: HomeLeavePass = {
+                id: `gym-${currentStudentRoll}`,
+                studentId: currentStudentRoll,
+                studentName: userSession.name,
+                rollNo: currentStudentRoll,
+                block: userSession.block || 'Tagore',
+                roomNumber: userSession.roomNumber || '101',
+                studentPhone: '+91 98765 43210',
+                parentPhone: userSession.parentPhone || '+91 98123 45678',
+                destination: 'Campus Fitness Gym',
+                departureDate: studentGymRecord?.gymShift.split('-')[0].trim() || '05:00 PM',
+                expectedReturnDate: studentGymRecord?.gymShift.split('-')[1]?.trim() || '07:00 PM',
+                reason: `Permanent Gym Shift (${studentGymRecord?.gymShift})`,
+                status: 'Approved' as LeaveStatus,
+                parentSmsSent: false,
+                createdAt: '2026-08-01',
+                verificationToken: `WDN-GYM-PERM-${currentStudentRoll}`,
+                isGymPass: true
+              };
+              setViewDigitalPass(gymPassObj);
+            }}
+            className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-xl flex items-center gap-2 shadow-lg shrink-0"
+          >
+            <QrCode className="w-4 h-4" />
+            <span>Show My Daily Gym QR Pass</span>
+          </button>
         </div>
       )}
 
-      {/* Gate Pass Cards List */}
+      {/* Normal Passes */}
       <div className="space-y-4">
         {filteredPasses.length === 0 ? (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
             <FileText className="w-8 h-8 text-slate-600 mx-auto mb-2" />
             <p className="text-sm font-semibold text-slate-300">No Gate Passes Found</p>
-            <p className="text-xs text-slate-500 mt-1">
-              {role === 'student'
-                ? 'You have not submitted any gate pass request yet.'
-                : 'No gate passes matching this filter.'}
-            </p>
           </div>
         ) : (
-          filteredPasses.map((pass) => {
-            const isDeparted = pass.status === 'Departed';
-            const isApproved = pass.status === 'Approved';
-            const isApplied = pass.status === 'Applied';
-            const isReturned = pass.status === 'Returned';
-
-            return (
-              <div
-                key={pass.id}
-                className={`bg-slate-900 border rounded-2xl p-5 shadow-lg transition-all ${
-                  isDeparted
-                    ? 'border-amber-500/50 bg-gradient-to-r from-amber-950/20 via-slate-900 to-slate-900'
-                    : isApproved
-                    ? 'border-emerald-500/40 bg-slate-900'
-                    : 'border-slate-800'
-                }`}
-              >
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  {/* Student & Destination Info */}
-                  <div className="space-y-2.5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                        {pass.block} Block • Room {pass.roomNumber}
-                      </span>
-
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
-                        {pass.isGymPass ? <Dumbbell className="w-3 h-3 text-amber-400" /> : null}
-                        {pass.passCategory || 'Local Outing'}
-                      </span>
-
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                          isDeparted
-                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
-                            : isApproved
-                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                            : isReturned
-                            ? 'bg-slate-800 text-slate-400 border border-slate-700'
-                            : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
-                        }`}
-                      >
-                        Status: {pass.status}
-                      </span>
-
-                      {pass.verificationToken && isApproved && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                          <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                          SEAL: {pass.verificationToken}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-base font-bold text-white flex items-center gap-2">
-                        <User className="w-4 h-4 text-slate-400" />
-                        <span>{pass.studentName}</span>
-                        <span className="text-xs text-slate-400 font-normal">({pass.rollNo})</span>
-                      </h3>
-
-                      {pass.year && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700">
-                          {pass.year} Year
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-300">
-                      <div className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span><strong>Destination:</strong> {pass.destination}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <Phone className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                        <span><strong>Parent Mobile:</strong> {pass.parentPhone}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span><strong>Departure:</strong> {pass.departureDate}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                        <span><strong>Return Limit (Max 8 PM):</strong> {pass.expectedReturnDate}</span>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-slate-400 bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
-                      <strong>Reason:</strong> {pass.reason}
-                    </p>
+          filteredPasses.map((pass) => (
+            <div key={pass.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300">
+                      {pass.block} • Room {pass.roomNumber}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300">
+                      {pass.isGymPass ? '💪 Daily Gym Pass' : (pass.passCategory || 'Local Outing')}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300">
+                      {pass.status}
+                    </span>
                   </div>
 
-                  {/* Actions for Student & Warden */}
-                  <div className="flex flex-col gap-2 shrink-0 border-t lg:border-t-0 lg:border-l border-slate-800 pt-3 lg:pt-0 lg:pl-4 justify-center">
-                    {/* Student Digital QR Pass Button */}
-                    {isApproved && (
-                      <button
-                        onClick={() => setViewDigitalPass(pass)}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
-                      >
-                        <QrCode className="w-4 h-4" />
-                        <span>View Digital Gate QR Pass</span>
-                      </button>
-                    )}
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <User className="w-4 h-4 text-slate-400" />
+                    <span>{pass.studentName} ({pass.rollNo})</span>
+                  </h3>
 
-                    {role === 'warden' && (
-                      <div className="flex flex-wrap gap-2">
-                        {isApplied && (
-                          <button
-                            onClick={() => onUpdateLeaveStatus(pass.id, 'Approved', true)}
-                            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            Approve Pass & Issue Digital Seal
-                          </button>
-                        )}
-
-                        {(isApproved || isApplied) && (
-                          <button
-                            onClick={() => onRecordGateScan(pass.id, 'EXITED', 'Chief Warden Terminal')}
-                            className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
-                          >
-                            <ArrowRight className="w-3.5 h-3.5" />
-                            Verify Exit
-                          </button>
-                        )}
-
-                        {isDeparted && (
-                          <button
-                            onClick={() => onRecordGateScan(pass.id, 'RE_ENTERED', 'Chief Warden Terminal')}
-                            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            Verify Re-Entry
-                          </button>
-                        )}
-                      </div>
-                    )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300">
+                    <div><strong>Destination:</strong> {pass.destination}</div>
+                    <div><strong>Departure / Shift:</strong> <span className="font-mono text-emerald-400">{pass.departureDate}</span></div>
+                    <div><strong>Return Cutoff:</strong> <span className="font-mono text-rose-400">{pass.expectedReturnDate}</span></div>
+                    <div><strong>Reason:</strong> {pass.reason}</div>
                   </div>
                 </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setViewDigitalPass(pass)}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5"
+                  >
+                    <QrCode className="w-4 h-4 text-amber-400" />
+                    <span>View QR Pass</span>
+                  </button>
+
+                  {role === 'warden' && pass.status === 'Applied' && (
+                    <button
+                      onClick={() => onUpdateLeaveStatus(pass.id, 'Approved')}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold"
+                    >
+                      Approve Pass
+                    </button>
+                  )}
+                </div>
               </div>
-            );
-          })
+            </div>
+          ))
         )}
       </div>
 
-      {/* Apply Leave Modal */}
+      {/* WARDEN GYM ROSTER MODAL */}
+      {showGymRegistryModal && role === 'warden' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-xs">
+          <div className="bg-slate-900 border border-amber-500/40 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Dumbbell className="w-5 h-5 text-amber-400" />
+                <h3 className="text-base font-bold text-white">Warden Gym Membership & Shift Setup</h3>
+              </div>
+              <button onClick={() => setShowGymRegistryModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddGymMember} className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
+              <h4 className="text-xs font-bold text-amber-300 uppercase">Set Fixed Gym Shift for Student</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                <input
+                  type="text"
+                  placeholder="Student Name"
+                  value={gymStudentName}
+                  onChange={(e) => setGymStudentName(e.target.value)}
+                  className="bg-slate-900 border border-slate-800 rounded-xl p-2 text-white"
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Roll No (e.g. 2024CS101)"
+                  value={gymStudentRoll}
+                  onChange={(e) => setGymStudentRoll(e.target.value)}
+                  className="bg-slate-900 border border-slate-800 rounded-xl p-2 text-white font-mono"
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Room No (e.g. Tagore-101)"
+                  value={gymStudentRoom}
+                  onChange={(e) => setGymStudentRoom(e.target.value)}
+                  className="bg-slate-900 border border-slate-800 rounded-xl p-2 text-white"
+                  required
+                />
+                <select
+                  value={gymBlock}
+                  onChange={(e) => setGymBlock(e.target.value as BlockName)}
+                  className="bg-slate-900 border border-slate-800 rounded-xl p-2 text-white"
+                >
+                  <option value="Tagore">Tagore Block</option>
+                  <option value="Tilak">Tilak Block</option>
+                  <option value="Subhash">Subhash Block</option>
+                </select>
+                <select
+                  value={gymYear}
+                  onChange={(e) => setGymYear(Number(e.target.value))}
+                  className="bg-slate-900 border border-slate-800 rounded-xl p-2 text-white"
+                >
+                  <option value={1}>1st Year</option>
+                  <option value={2}>2nd Year</option>
+                  <option value={3}>3rd Year</option>
+                  <option value={4}>4th Year</option>
+                </select>
+
+                <select
+                  value={gymShiftTime}
+                  onChange={(e) => setGymShiftTime(e.target.value)}
+                  className="bg-slate-900 border border-amber-500/50 rounded-xl p-2 text-amber-300 font-bold"
+                >
+                  <option value="06:00 AM - 07:30 AM">Morning: 06:00 AM - 07:30 AM</option>
+                  <option value="05:00 PM - 07:00 PM">Evening: 05:00 PM - 07:00 PM</option>
+                  <option value="06:00 PM - 07:45 PM">Evening: 06:00 PM - 07:45 PM</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Issue Permanent Daily Gym Gate Pass</span>
+              </button>
+            </form>
+
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-slate-300">Active Gym Members ({gymMembers.length}):</h4>
+              <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                {gymMembers.map((g) => (
+                  <div key={g.id} className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
+                    <div>
+                      <p className="font-bold text-white">{g.studentName} ({g.rollNo})</p>
+                      <p className="text-slate-400 text-[11px]">
+                        {g.roomNumber} • {g.year} Year • Shift: <span className="text-amber-300 font-bold">{g.gymShift}</span>
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveGymMember(g.id)}
+                      className="p-1.5 text-rose-400 hover:bg-rose-950/40 rounded-lg border border-rose-500/30"
+                      title="Revoke Gym Pass"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QR PASS MODAL */}
+      {viewDigitalPass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
+          <div className="bg-slate-900 border-2 border-emerald-500/60 rounded-3xl max-w-md w-full p-6 shadow-2xl relative overflow-hidden space-y-4">
+            <div className="absolute top-0 right-0 bg-emerald-500 text-slate-950 font-black text-[10px] px-3 py-1 rounded-bl-2xl uppercase tracking-widest">
+              OFFICIAL WARDEN SEAL
+            </div>
+
+            <div className="text-center space-y-1 pt-2">
+              <div className="w-12 h-12 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto">
+                {viewDigitalPass.isGymPass ? <Dumbbell className="w-7 h-7 text-amber-400" /> : <ShieldCheck className="w-7 h-7" />}
+              </div>
+              <h3 className="text-lg font-extrabold text-white">
+                {viewDigitalPass.isGymPass ? 'Permanent Daily Gym Pass' : 'Hostel Gate Pass'}
+              </h3>
+              <p className="text-xs font-mono text-emerald-400 font-bold bg-emerald-500/10 py-1 px-3 rounded-xl border border-emerald-500/20 inline-block">
+                {viewDigitalPass.verificationToken || 'WDN-SEAL-AUTHENTICATED'}
+              </p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border-4 border-slate-800 text-center space-y-2 max-w-[220px] mx-auto shadow-inner">
+              <QrCode className="w-36 h-36 mx-auto text-slate-950" />
+              <p className="text-[10px] font-mono text-slate-800 font-bold">
+                {viewDigitalPass.rollNo} • {viewDigitalPass.isGymPass ? 'DAILY RECURRING' : 'SINGLE USE'}
+              </p>
+            </div>
+
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs">
+              <div className="flex justify-between border-b border-slate-800/80 pb-1.5">
+                <span className="text-slate-400">Student Name:</span>
+                <span className="font-bold text-white">{viewDigitalPass.studentName}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-800/80 pb-1.5">
+                <span className="text-slate-400">Roll & Room:</span>
+                <span className="font-bold text-white">{viewDigitalPass.rollNo} ({viewDigitalPass.roomNumber})</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-800/80 pb-1.5">
+                <span className="text-slate-400">Shift / Window:</span>
+                <span className="font-bold text-emerald-300 font-mono">{viewDigitalPass.departureDate} - {viewDigitalPass.expectedReturnDate}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setViewDigitalPass(null)}
+              className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold"
+            >
+              Close Pass
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* APPLY PASS MODAL */}
       {showApplyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
@@ -550,23 +637,32 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
               <Send className="w-5 h-5 text-amber-400" />
               Apply Gate Pass / Outing Request
             </h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Hostel Curfew Rules: Outing pass must be completed before <strong>8:00 PM</strong>.
-            </p>
+
+            <div
+              className={`mt-3 p-3 rounded-xl border text-xs leading-relaxed ${
+                currentWindow.isOpen
+                  ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
+                  : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+              }`}
+            >
+              <p className="font-bold flex items-center gap-1.5">
+                {currentWindow.isOpen ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Lock className="w-4 h-4 text-rose-400" />}
+                <span>Application Window Status ({todayDayName}):</span>
+              </p>
+              <p className="text-[11px] mt-0.5">{currentWindow.message}</p>
+            </div>
 
             {formError && (
-              <div className="mt-3 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs flex items-center gap-2">
+              <div className="mt-2 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{formError}</span>
               </div>
             )}
 
-            <form onSubmit={handleFormSubmit} className="mt-4 space-y-4">
+            <form onSubmit={handleFormSubmit} className="mt-4 space-y-3.5">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Student Name & Year:
-                  </label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Student:</label>
                   <input
                     type="text"
                     value={`${userSession.name} (${studentYear} Year)`}
@@ -574,11 +670,8 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-400"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Roll No & Room:
-                  </label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Roll & Room:</label>
                   <input
                     type="text"
                     value={`${userSession.rollNo} (${userSession.roomNumber})`}
@@ -588,62 +681,33 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 </div>
               </div>
 
-              {/* Pass Category Selector */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Pass Type (गेट पास प्रकार):
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['Local Outing', 'Gym Outing', 'Outstation Vacation'] as PassCategory[]).map((cat) => (
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Pass Type:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['Local Outing', 'Outstation Vacation'] as PassCategory[]).map((cat) => (
                     <button
                       type="button"
                       key={cat}
-                      onClick={() => {
-                        setPassCategory(cat);
-                        if (cat === 'Gym Outing') setIsGymPass(true);
-                        else setIsGymPass(false);
-                      }}
-                      className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 border ${
+                      onClick={() => setPassCategory(cat)}
+                      className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
                         passCategory === cat
-                          ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md'
-                          : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700'
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold'
+                          : 'bg-slate-950 text-slate-300 border-slate-800'
                       }`}
                     >
-                      {cat === 'Gym Outing' ? <Dumbbell className="w-3.5 h-3.5" /> : null}
-                      <span>{cat === 'Outstation Vacation' ? 'Home Leave (Night)' : cat}</span>
+                      {cat === 'Outstation Vacation' ? 'Home / Night Leave' : 'Local Outing (Day)'}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Eligibility Check Banner */}
-              <div
-                className={`p-3 rounded-xl border text-xs leading-relaxed ${
-                  currentEligibility.allowed
-                    ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
-                    : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
-                }`}
-              >
-                <p className="font-bold flex items-center gap-1.5">
-                  {currentEligibility.allowed ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-rose-400" />
-                  )}
-                  <span>Hostel Outing Rule Check ({todayDayName}):</span>
-                </p>
-                <p className="text-[11px] mt-0.5">{currentEligibility.reason}</p>
-              </div>
-
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Destination (कहाँ जा रहे हैं - Exact Place Name):
-                </label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Destination:</label>
                 <input
                   type="text"
                   value={destination}
                   onChange={(e) => setDestination(e.target.value)}
-                  placeholder="e.g. City Market / Gym / Medical Store"
+                  placeholder="e.g. City Market / Medical Store"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white"
                   required
                 />
@@ -651,43 +715,39 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Departure Time:
+                  <label className="block text-xs font-semibold text-indigo-400 mb-1 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-indigo-400" />
+                    Departure Time (Live IST Auto):
                   </label>
                   <input
                     type="text"
-                    value={departureDate}
-                    onChange={(e) => setDepartureDate(e.target.value)}
-                    placeholder="e.g. 05:00 PM"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
-                    required
+                    value={departureDate || getLiveTimeString()}
+                    disabled
+                    className="w-full bg-slate-950/80 border border-indigo-500/40 rounded-xl px-3 py-2 text-xs text-emerald-400 font-mono font-bold cursor-not-allowed"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  <label className="block text-xs font-semibold text-rose-400 mb-1 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-rose-400" />
                     Return Time (Max 08:00 PM):
                   </label>
                   <input
                     type="text"
                     value={returnDate}
-                    onChange={(e) => setReturnDate(e.target.value)}
-                    placeholder="e.g. 08:00 PM"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
-                    required
+                    disabled
+                    className="w-full bg-slate-950/80 border border-rose-500/40 rounded-xl px-3 py-2 text-xs text-rose-300 font-mono font-bold cursor-not-allowed"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Reason for Outing (कारण):
-                </label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Reason:</label>
                 <textarea
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   rows={2}
-                  placeholder="e.g. Buying study materials / Workout / Grocery..."
+                  placeholder="e.g. Buying study materials..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white"
                   required
                 />
@@ -703,9 +763,9 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={!currentEligibility.allowed}
+                  disabled={!canSubmitPass}
                   className={`px-5 py-2 text-xs font-bold rounded-xl shadow-lg transition-all ${
-                    currentEligibility.allowed
+                    canSubmitPass
                       ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
                       : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                   }`}

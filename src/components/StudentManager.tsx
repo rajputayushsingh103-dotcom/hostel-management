@@ -1,9 +1,14 @@
+// src/components/StudentManager.tsx
 import React, { useState, useEffect } from 'react';
 import { hostelDB, StudentRecord } from '../data/hostelDB';
 import { UserMinus, UserPlus, Search, CheckCircle, DoorOpen, Edit3, X } from 'lucide-react';
-import { BlockName } from '../types';
+import { BlockName, Role } from '../types';
 
-export const StudentManager: React.FC = () => {
+interface StudentManagerProps {
+  role?: Role;
+}
+
+export const StudentManager: React.FC<StudentManagerProps> = ({ role = 'warden' }) => {
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -19,24 +24,24 @@ export const StudentManager: React.FC = () => {
   const [password, setPassword] = useState('');
   const [parentPhone, setParentPhone] = useState('');
 
-  // Edit State & Original Roll Store
+  // Edit State
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
   const [originalRollNo, setOriginalRollNo] = useState<string>('');
 
-  // Live Realtime listener
+  const isReadOnly = role === 'college_admin';
+
   useEffect(() => {
     setLoading(true);
     const unsubscribe = hostelDB.subscribeToStudents((cloudStudents) => {
       setStudents(cloudStudents);
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
-  // Delete
   const handleDeleteStudent = async (student: StudentRecord) => {
-    if (window.confirm(`Kya aap ${student.name} (${student.rollNo}) ko database se remove karna chahte hain?`)) {
+    if (isReadOnly) return;
+    if (window.confirm(`Kya aap ${student.name} (${student.rollNo}) ko remove karna chahte hain?`)) {
       const idToDelete = student.studentId || student.rollNo;
       await hostelDB.deleteStudent(idToDelete);
       setSuccessMsg(`Student ${student.name} deleted successfully.`);
@@ -44,9 +49,9 @@ export const StudentManager: React.FC = () => {
     }
   };
 
-  // Add
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) return;
     if (!password.trim()) {
       alert('Password dalein!');
       return;
@@ -67,7 +72,6 @@ export const StudentManager: React.FC = () => {
 
     await hostelDB.addStudent(newStd);
     setShowAddForm(false);
-
     setName('');
     setRollNo('');
     setRoomNumber('');
@@ -78,10 +82,9 @@ export const StudentManager: React.FC = () => {
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  // Save Edit
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingStudent) return;
+    if (isReadOnly || !editingStudent) return;
 
     const newRoll = editingStudent.rollNo.trim().toUpperCase();
     const oldRoll = originalRollNo.trim().toUpperCase();
@@ -104,8 +107,7 @@ export const StudentManager: React.FC = () => {
     };
 
     await hostelDB.addStudent(updatedData);
-
-    setSuccessMsg(`✅ Student "${updatedData.name}" (${updatedData.rollNo}) successfully updated!`);
+    setSuccessMsg(`✅ Student "${updatedData.name}" (${updatedData.rollNo}) updated!`);
     setEditingStudent(null);
     setOriginalRollNo('');
     setTimeout(() => setSuccessMsg(''), 4000);
@@ -124,17 +126,22 @@ export const StudentManager: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
             <DoorOpen className="w-5 h-5 text-indigo-400" />
-            <span>Hostel Student Records & Room Allocation</span>
+            <span>Hostel Student Records & Admissions</span>
           </h2>
+          <p className="text-xs text-slate-400 mt-1">
+            {isReadOnly ? 'College Administration Monitoring Mode (View-Only)' : 'Chief Warden Executive Dashboard'}
+          </p>
         </div>
 
-        <button
-          onClick={() => { setShowAddForm(!showAddForm); setEditingStudent(null); }}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg"
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>{showAddForm ? 'Cancel' : 'Register New Student'}</span>
-        </button>
+        {!isReadOnly && (
+          <button
+            onClick={() => { setShowAddForm(!showAddForm); setEditingStudent(null); }}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>{showAddForm ? 'Cancel' : 'Register New Student'}</span>
+          </button>
+        )}
       </div>
 
       {successMsg && (
@@ -144,8 +151,8 @@ export const StudentManager: React.FC = () => {
         </div>
       )}
 
-      {/* ✏️ EDIT FORM */}
-      {editingStudent && (
+      {/* EDIT FORM */}
+      {editingStudent && !isReadOnly && (
         <div className="mb-6 p-5 bg-slate-950 border-2 border-indigo-500/60 rounded-2xl">
           <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
             <span className="text-indigo-300 font-bold text-xs uppercase">Edit Student: {editingStudent.name}</span>
@@ -258,8 +265,8 @@ export const StudentManager: React.FC = () => {
         </div>
       )}
 
-      {/* ➕ ADD FORM */}
-      {showAddForm && (
+      {/* ADD FORM */}
+      {showAddForm && !isReadOnly && (
         <form onSubmit={handleAddStudent} className="mb-6 p-4 bg-slate-950 border border-indigo-500/40 rounded-2xl space-y-3">
           <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">New Student Admission Form</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
@@ -354,7 +361,7 @@ export const StudentManager: React.FC = () => {
               <th className="py-2.5 px-3">Year</th>
               <th className="py-2.5 px-3">Password</th>
               <th className="py-2.5 px-3">Parent Phone</th>
-              <th className="py-2.5 px-3 text-right">Actions</th>
+              {!isReadOnly && <th className="py-2.5 px-3 text-right">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60">
@@ -366,37 +373,32 @@ export const StudentManager: React.FC = () => {
                 <td className="py-3 px-3 text-emerald-400">{std.year} Year</td>
                 <td className="py-3 px-3 font-mono text-slate-300 bg-slate-950/60 px-2 py-1 rounded">{std.password}</td>
                 <td className="py-3 px-3 text-slate-400">{std.parentPhone}</td>
-                <td className="py-3 px-3 text-right">
-                  <div className="inline-flex items-center gap-1.5">
-                    <button
-                      onClick={() => { 
-                        setEditingStudent({ ...std }); 
-                        setOriginalRollNo(std.rollNo); 
-                        setShowAddForm(false); 
-                      }}
-                      className="px-2.5 py-1.5 bg-indigo-500/10 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-lg text-[11px] font-bold"
-                    >
-                      <Edit3 className="w-3.5 h-3.5 inline mr-1" />
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteStudent(std)}
-                      className="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white rounded-lg text-[11px] font-bold"
-                    >
-                      <UserMinus className="w-3.5 h-3.5 inline mr-1" />
-                      Remove
-                    </button>
-                  </div>
-                </td>
+                {!isReadOnly && (
+                  <td className="py-3 px-3 text-right">
+                    <div className="inline-flex items-center gap-1.5">
+                      <button
+                        onClick={() => { 
+                          setEditingStudent({ ...std }); 
+                          setOriginalRollNo(std.rollNo); 
+                          setShowAddForm(false); 
+                        }}
+                        className="px-2.5 py-1.5 bg-indigo-500/10 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-lg text-[11px] font-bold"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 inline mr-1" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteStudent(std)}
+                        className="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white rounded-lg text-[11px] font-bold"
+                      >
+                        <UserMinus className="w-3.5 h-3.5 inline mr-1" />
+                        Remove
+                      </button>
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
-            {filtered.length === 0 && !loading && (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-slate-500 text-xs">
-                  Koi student nahi mila. Naya student add karein.
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>

@@ -50,7 +50,6 @@ const INITIAL_STUDENTS: StudentRecord[] = [
 ];
 
 export const hostelDB = {
-  // 🟢 1. Cloud se Students lena
   getAllStudents: async (): Promise<StudentRecord[]> => {
     try {
       const colRef = collection(db, COLLECTION_NAME);
@@ -74,7 +73,6 @@ export const hostelDB = {
     }
   },
 
-  // 🟢 2. Live Sync
   subscribeToStudents: (callback: (students: StudentRecord[]) => void) => {
     const colRef = collection(db, COLLECTION_NAME);
 
@@ -99,38 +97,32 @@ export const hostelDB = {
     );
   },
 
-  // 🟢 3. Add Student
   addStudent: async (newStudent: StudentRecord): Promise<void> => {
-    const docId = newStudent.studentId || `std_${newStudent.rollNo.trim().toUpperCase()}`;
     const cleanRoll = newStudent.rollNo.trim().toUpperCase();
-    const docRef = doc(db, COLLECTION_NAME, docId);
-    
-    await setDoc(docRef, {
-      ...newStudent,
-      studentId: docId,
-      rollNo: cleanRoll
-    }, { merge: true });
+    const docRef = doc(db, COLLECTION_NAME, cleanRoll);
+    await setDoc(
+      docRef,
+      {
+        ...newStudent,
+        studentId: cleanRoll,
+        rollNo: cleanRoll
+      },
+      { merge: true }
+    );
   },
 
-  // 🟢 4. FIXED UPDATE: Purana ID use karke sirf usi ko update karega
   updateStudent: async (studentId: string, updatedFields: Partial<StudentRecord>): Promise<void> => {
-    const docRef = doc(db, COLLECTION_NAME, studentId);
-    const cleanRoll = updatedFields.rollNo ? updatedFields.rollNo.trim().toUpperCase() : undefined;
-    
-    await setDoc(docRef, {
-      ...updatedFields,
-      ...(cleanRoll ? { rollNo: cleanRoll } : {}),
-      studentId
-    }, { merge: true });
+    const cleanId = studentId.trim().toUpperCase();
+    const docRef = doc(db, COLLECTION_NAME, cleanId);
+    await setDoc(docRef, { ...updatedFields, studentId: cleanId }, { merge: true });
   },
 
-  // 🟢 5. Delete Student
   deleteStudent: async (studentId: string): Promise<void> => {
-    const docRef = doc(db, COLLECTION_NAME, studentId);
+    const cleanId = studentId.trim().toUpperCase();
+    const docRef = doc(db, COLLECTION_NAME, cleanId);
     await deleteDoc(docRef);
   },
 
-  // 🟢 6. Login Authenticate
   authenticateStudent: async (rollNo: string, pass: string): Promise<StudentRecord | null> => {
     const list = await hostelDB.getAllStudents();
     const inputRoll = rollNo.trim().toUpperCase();
