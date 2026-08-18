@@ -12,6 +12,7 @@ import { AlertsSection } from './components/AlertsSection';
 import { MediaModal } from './components/MediaModal';
 import { YearGroupsSection } from './components/YearGroupsSection';
 import { StudentManager } from './components/StudentManager';
+import { GuardTerminal } from './components/GuardTerminal'; // 👈 Dedicated Guard Scanner
 import {
   INITIAL_MESS_MENU,
   INITIAL_ROOMS,
@@ -200,6 +201,39 @@ export default function App() {
   }
 
   const role = userSession.role;
+
+  // 🟢 1. DEDICATED GUARD SCREEN (NO NAVBAR, DIRECT SCANNER TERMINAL)
+  if (role === 'guard') {
+    return (
+      <GuardTerminal
+        leavePasses={leavePasses}
+        onRecordGateScan={(id, action, guardName) => {
+          const now = new Date();
+          const nowStr = `${now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+          setLeavePasses(
+            leavePasses.map((p) => {
+              if (p.id === id) {
+                const currentLogs = p.gateScanLogs || [];
+                const newCount = (p.gateMovementCount || 0) + 1;
+                const newLog = { timestamp: nowStr, action, verifiedByGuard: guardName || 'Main Gate Guard' };
+                const newStatus = action === 'EXITED' ? ('Departed' as LeaveStatus) : (action === 'RE_ENTERED' && p.passCategory === 'Outstation Vacation' ? ('Returned' as LeaveStatus) : p.status);
+                return {
+                  ...p,
+                  status: newStatus,
+                  gateMovementCount: newCount,
+                  gateScanLogs: [newLog, ...currentLogs]
+                };
+              }
+              return p;
+            })
+          );
+        }}
+        userSession={userSession}
+        onLogout={() => setUserSession(null)}
+      />
+    );
+  }
 
   const activeAlertCount = alerts.filter((a) => a.active).length;
   const bunkCount = attendanceSummaries.filter((s) => s.collegeBunkFlagToday).length;
@@ -601,9 +635,7 @@ export default function App() {
             role={role}
             rooms={rooms}
             onUpdateOccupant={handleUpdateOccupant}
-            onUpdateAttendanceSummaries={(newSummaries) => {
-              if (role === 'warden') setAttendanceSummaries(newSummaries);
-            }}
+            onUpdateAttendanceSummaries={(newSummaries) => setAttendanceSummaries(newSummaries)}
           />
         )}
 
