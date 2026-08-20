@@ -21,7 +21,8 @@ import {
   Sparkles,
   MapPin,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Check
 } from 'lucide-react';
 import { HomeLeavePass, LeaveStatus, PassCategory, Role, UserAuthSession, OutingRulesConfig, GymMemberRecord, BlockName } from '../types';
 
@@ -61,8 +62,6 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   onRecordGateScan
 }) => {
   const [showApplyModal, setShowApplyModal] = useState(false);
-  const [showGateTerminalModal, setShowGateTerminalModal] = useState(false);
-  const [showRulesConfigModal, setShowRulesConfigModal] = useState(false);
   const [showGymRegistryModal, setShowGymRegistryModal] = useState(false);
   const [viewDigitalPass, setViewDigitalPass] = useState<HomeLeavePass | null>(null);
 
@@ -218,7 +217,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
 
   const checkOutingEligibility = (category: PassCategory) => {
     if (category === 'Outstation Vacation') {
-      return { allowed: true, reason: '✈️ Home / Night Stay Leave: Requires Parent SMS & Warden Approval.' };
+      return { allowed: true, reason: '✈️ Home / Night Stay Leave: Requires Warden Approval.' };
     }
 
     if (studentYear === 1) {
@@ -256,6 +255,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   const currentEligibility = checkOutingEligibility(passCategory);
   const canSubmitPass = currentWindow.isOpen && currentEligibility.allowed;
 
+  // 🟢 1. STUDENT PASS APPLY (Saves as 'Applied' so Warden gets approval request)
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
@@ -306,8 +306,8 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
       finalReason = `Address: ${reasonOrAddress.trim()} (Return: ${homeReturnDay || dayNames[retObj.getDay()]})`;
     }
 
-    const newCreatedPass: HomeLeavePass = {
-      id: `pass-${Date.now()}`,
+    // Call parent handler to save into state & Cloud DB
+    onApplyLeavePass({
       studentId: userSession.studentId || currentStudentRoll,
       studentName: userSession.name || 'Student',
       rollNo: currentStudentRoll || '2024CS101',
@@ -319,24 +319,17 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
       departureDate: finalDepartureStr,
       expectedReturnDate: finalReturnStr,
       reason: finalReason,
-      status: 'Approved' as LeaveStatus,
-      parentSmsSent: false,
-      createdAt: new Date().toISOString(),
       passCategory: passCategory,
       year: studentYear,
       isGymPass: false,
       verificationToken: `WDN-SEAL-${Math.floor(1000 + Math.random() * 9000)}-AUTHENTICATED`
-    };
-
-    onApplyLeavePass(newCreatedPass);
+    });
 
     setShowApplyModal(false);
     setDestination('');
     setReasonOrAddress('');
     setFormError('');
-
-    // Open QR pass directly upon submission
-    setViewDigitalPass(newCreatedPass);
+    alert('✅ Gate Pass request submitted to Warden Office for approval!');
   };
 
   const handleAddGymMember = (e: React.FormEvent) => {
@@ -380,7 +373,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
     setGymStudentName('');
     setGymStudentRoll('');
     setGymStudentRoom('');
-    alert(`✅ Student ${newGymMember.studentName} (${cleanRoll}) registered for Gym Shift ${gymShiftTime}!`);
+    alert(`✅ Student ${newGymMember.studentName} registered for Gym Shift ${gymShiftTime}!`);
   };
 
   const handleRemoveGymMember = (id: string) => {
@@ -389,20 +382,21 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
     }
   };
 
-  // 🟢 RELIABLE STUDENT PASSES FILTER (Matching Roll No or Name)
-  const studentActivePasses = leavePasses.filter((p) => {
+  // 🟢 Filter for Student and Warden
+  const visiblePasses = leavePasses.filter((p) => {
     if (role === 'student') {
       const pRoll = (p.rollNo || '').trim().toUpperCase();
       const sRoll = currentStudentRoll.trim().toUpperCase();
       const pName = (p.studentName || '').toLowerCase();
       const sName = (userSession.name || '').toLowerCase();
-
       return pRoll === sRoll || p.studentId === userSession.studentId || (sName && pName.includes(sName));
     }
+    // For Warden & Admin
     if (filterStatus === 'All') return true;
     return p.status === filterStatus;
   });
 
+  const appliedPendingCount = leavePasses.filter((p) => p.status === 'Applied').length;
   const outOfHostelCount = leavePasses.filter((p) => p.status === 'Departed').length;
 
   return (
@@ -418,9 +412,11 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
               <div>
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
                   Gate Pass Security & Outing Terminal
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                    LIVE QR VERIFIED
-                  </span>
+                  {role === 'warden' && appliedPendingCount > 0 && (
+                    <span className="text-xs bg-rose-500/20 text-rose-300 font-bold px-2.5 py-0.5 rounded-full border border-rose-500/30 animate-pulse">
+                      {appliedPendingCount} Pending Requests
+                    </span>
+                  )}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
                   Today: <strong className="text-indigo-400 font-bold">{todayDayName}</strong> • Weekdays: <strong>4:30 PM - 6:00 PM</strong> | Sunday: <strong>9 AM-12 PM & 4:30-6 PM</strong>
@@ -452,6 +448,31 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Filter Tabs for Warden */}
+      {role === 'warden' && (
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-3.5 rounded-2xl">
+          <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-semibold">
+            {['All', 'Applied', 'Approved', 'Departed', 'Returned'].map((st) => (
+              <button
+                key={st}
+                onClick={() => setFilterStatus(st)}
+                className={`px-3.5 py-1.5 rounded-xl transition-all ${
+                  filterStatus === st
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-md'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                {st === 'Applied' ? `🟡 Pending Approval (${appliedPendingCount})` : st === 'All' ? 'All Gate Passes' : st}
+              </button>
+            ))}
+          </div>
+
+          <span className="text-xs text-amber-300 font-bold bg-amber-500/10 px-2.5 py-1 rounded-xl border border-amber-500/20">
+            Currently Away: {outOfHostelCount} Students
+          </span>
+        </div>
+      )}
 
       {/* ISOLATED GYM BANNER (Visible only to this Gym Student) */}
       {isStudentGymMember && (
@@ -504,17 +525,12 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
         </div>
       )}
 
-      {/* 🟢 PASSES LIST (WITH VIEW DIGITAL QR PASS ON EVERY CARD) */}
+      {/* 🟢 PASSES LIST (WITH WARDEN APPROVE BUTTON & STUDENT QR BUTTON) */}
       <div className="space-y-4">
-        {studentActivePasses.length === 0 ? (
+        {visiblePasses.length === 0 ? (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 space-y-3">
             <FileText className="w-8 h-8 text-slate-600 mx-auto" />
             <p className="text-sm font-semibold text-slate-300">No Gate Passes Found</p>
-            <p className="text-xs text-slate-500">
-              {role === 'student'
-                ? 'Niche diye gaye button se apna Outing ya Home Pass banayein:'
-                : 'No gate passes matching this filter.'}
-            </p>
             {role === 'student' && (
               <button
                 onClick={() => setShowApplyModal(true)}
@@ -526,59 +542,89 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
             )}
           </div>
         ) : (
-          studentActivePasses.map((pass) => (
-            <div key={pass.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300">
-                      {pass.block} • Room {pass.roomNumber}
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300">
-                      {pass.isGymPass ? '💪 Daily Gym Pass' : (pass.passCategory || 'Local Outing')}
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                      Status: {pass.status}
-                    </span>
-                  </div>
+          visiblePasses.map((pass) => {
+            const isApproved = pass.status === 'Approved';
+            const isPending = pass.status === 'Applied';
+            const isDeparted = pass.status === 'Departed';
 
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <User className="w-4 h-4 text-slate-400" />
-                    <span>{pass.studentName} ({pass.rollNo})</span>
-                  </h3>
+            return (
+              <div
+                key={pass.id}
+                className={`bg-slate-900 border rounded-2xl p-5 shadow-lg transition-all ${
+                  isPending
+                    ? 'border-amber-500/50 bg-gradient-to-r from-amber-950/20 via-slate-900 to-slate-900'
+                    : isApproved
+                    ? 'border-emerald-500/40'
+                    : 'border-slate-800'
+                }`}
+              >
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300">
+                        {pass.block} • Room {pass.roomNumber}
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300">
+                        {pass.isGymPass ? '💪 Daily Gym Pass' : (pass.passCategory || 'Local Outing')}
+                      </span>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                          isApproved
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                            : isDeparted
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
+                            : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                        }`}
+                      >
+                        Status: {pass.status === 'Applied' ? '🟡 Pending Approval' : pass.status}
+                      </span>
+                    </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300">
-                    <div><strong>Destination:</strong> {pass.destination}</div>
-                    <div><strong>Departure:</strong> <span className="font-mono text-emerald-400">{pass.departureDate}</span></div>
-                    <div><strong>Return Date/Time:</strong> <span className="font-mono text-rose-400">{pass.expectedReturnDate}</span></div>
-                    <div className="sm:col-span-2 bg-slate-950 p-2 rounded-lg border border-slate-800">
-                      <strong>{pass.passCategory === 'Outstation Vacation' ? 'Address Without College:' : 'Reason:'}</strong> {pass.reason}
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <User className="w-4 h-4 text-slate-400" />
+                      <span>{pass.studentName} ({pass.rollNo})</span>
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300">
+                      <div><strong>Destination:</strong> {pass.destination}</div>
+                      <div><strong>Departure:</strong> <span className="font-mono text-emerald-400">{pass.departureDate}</span></div>
+                      <div><strong>Return Date/Time:</strong> <span className="font-mono text-rose-400">{pass.expectedReturnDate}</span></div>
+                      <div className="sm:col-span-2 bg-slate-950 p-2 rounded-lg border border-slate-800">
+                        <strong>{pass.passCategory === 'Outstation Vacation' ? 'Address Without College:' : 'Reason:'}</strong> {pass.reason}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  {/* 🟢 ALWAYS VISIBLE QR PASS BUTTON */}
-                  <button
-                    onClick={() => setViewDigitalPass(pass)}
-                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition-all"
-                  >
-                    <QrCode className="w-4 h-4" />
-                    <span>View Digital Gate QR Pass</span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* QR Pass button for approved / gym passes */}
+                    {(isApproved || isDeparted || pass.isGymPass) && (
+                      <button
+                        onClick={() => setViewDigitalPass(pass)}
+                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition-all"
+                      >
+                        <QrCode className="w-4 h-4" />
+                        <span>View Digital QR Pass</span>
+                      </button>
+                    )}
 
-                  {role === 'warden' && pass.status === 'Applied' && (
-                    <button
-                      onClick={() => onUpdateLeaveStatus(pass.id, 'Approved')}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold"
-                    >
-                      Approve Pass
-                    </button>
-                  )}
+                    {/* 🟢 WARDEN APPROVE BUTTON */}
+                    {role === 'warden' && isPending && (
+                      <button
+                        onClick={() => {
+                          onUpdateLeaveStatus(pass.id, 'Approved');
+                          alert(`✅ Pass approved for ${pass.studentName}! Digital QR pass generated.`);
+                        }}
+                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-emerald-600/30"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>Approve Pass & Issue QR</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -602,7 +648,6 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
               </p>
             </div>
 
-            {/* Simulated Live QR Code */}
             <div className="bg-white p-4 rounded-2xl border-4 border-slate-800 text-center space-y-2 max-w-[220px] mx-auto shadow-inner">
               <QrCode className="w-36 h-36 mx-auto text-slate-950" />
               <p className="text-[10px] font-mono text-slate-800 font-bold">
@@ -837,7 +882,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 />
               </div>
 
-              {/* 🟢 1. LOCAL OUTING: AUTO-FETCHED TIME & 8 PM CURFEW */}
+              {/* LOCAL OUTING: AUTO-FETCHED TIME & 8 PM CURFEW */}
               {passCategory === 'Local Outing' ? (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -867,12 +912,12 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                   </div>
                 </div>
               ) : (
-                /* 🟢 2. HOME LEAVE: VISUAL CALENDAR SELECTION */
+                /* HOME LEAVE: VISUAL CALENDAR SELECTION */
                 <div className="space-y-3">
                   <div>
                     <label className="block text-xs font-semibold text-indigo-400 mb-1 flex items-center gap-1">
                       <CalendarIcon className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Ghar Jane Ki Date & Time (Calendar se Choose karein):</span>
+                      <span>Ghar Jane Ki Date & Time:</span>
                     </label>
 
                     <button
