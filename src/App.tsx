@@ -12,8 +12,8 @@ import { AlertsSection } from './components/AlertsSection';
 import { MediaModal } from './components/MediaModal';
 import { YearGroupsSection } from './components/YearGroupsSection';
 import { StudentManager } from './components/StudentManager';
-import { GuardTerminal } from './components/GuardTerminal'; // 👈 Dedicated Guard Scanner
-import { hostelDB } from './data/hostelDB'; // 👈 Cloud DB Connector
+import { GuardTerminal } from './components/GuardTerminal';
+import { hostelDB } from './data/hostelDB';
 import {
   INITIAL_MESS_MENU,
   INITIAL_ROOMS,
@@ -40,7 +40,8 @@ import {
   LeaveStatus,
   AttendanceTimingConfig,
   YearGroupMessage,
-  OutingRulesConfig
+  OutingRulesConfig,
+  BlockName
 } from './types';
 
 export default function App() {
@@ -83,7 +84,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_ALERTS;
   });
 
-  // 🟢 1. GATE PASSES STATE (Synced with Google Cloud Firestore)
   const [leavePasses, setLeavePasses] = useState<HomeLeavePass[]>(() => {
     const saved = localStorage.getItem('hostel_leave_passes');
     return saved ? JSON.parse(saved) : INITIAL_LEAVE_PASSES;
@@ -111,7 +111,6 @@ export default function App() {
 
   const [activeMedia, setActiveMedia] = useState<ComplaintMedia | null>(null);
 
-  // 🟢 2. REAL-TIME CLOUD LISTENER FOR GATE PASSES (Instant Multi-Device Sync)
   useEffect(() => {
     const unsubscribe = hostelDB.subscribeToPasses((cloudPasses) => {
       if (cloudPasses && cloudPasses.length > 0) {
@@ -121,7 +120,6 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Sync to localStorage
   useEffect(() => {
     if (userSession) {
       localStorage.setItem('hostel_user_session', JSON.stringify(userSession));
@@ -170,44 +168,159 @@ export default function App() {
     localStorage.setItem('hostel_outing_rules', JSON.stringify(outingRules));
   }, [outingRules]);
 
-  // AUTOMATED MISSED ATTENDANCE CRON
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date();
-      const todayDateStr = now.toISOString().split('T')[0];
+  // 🟢 1. AUTO ALLOT ON ADMISSION
+  const handleAutoAllotToRoom = (roomNumber: string, block: BlockName, studentData: any) => {
+    const cleanRoomNo = roomNumber.trim();
+    const existingRoom = rooms.find(
+      (r) => r.roomNumber.toLowerCase() === cleanRoomNo.toLowerCase() || r.roomNumber.toLowerCase().includes(cleanRoomNo.toLowerCase())
+    );
 
-      attendanceSummaries.forEach((student) => {
-        const studentYear = (student.studentId.includes('101') || student.studentId.includes('102')) ? 1 : (student.studentId.includes('201') ? 2 : 3);
-        const isMissed = student.missedDates.length > 0;
-        const isOnLeave = student.leaveCount > 0;
+    if (existingRoom) {
+      const currentOccupants = existingRoom.occupants || [];
+      
+      if (currentOccupants.length >= existingRoom.capacity) {
+        return {
+          success: false,
+          message: `⛔ ROOM FULL: Room ${existingRoom.roomNumber} (${existingRoom.block}) pehle se full hai (${currentOccupants.length}/${existingRoom.capacity} Beds Occupied)!`
+        };
+      }
 
-        if (isMissed && !isOnLeave) {
-          const alreadyPosted = yearGroupMessages.some(
-            (m) => m.flaggedStudentRoll === student.rollNo && m.timestamp.includes(todayDateStr)
-          );
+      const newOccupant: RoomOccupant = {
+        ...studentData,
+        id: `std-${Date.now()}`
+      };
 
-          if (!alreadyPosted) {
-            const autoMsg: YearGroupMessage = {
-              id: `auto-${Date.now()}-${student.studentId}`,
-              yearGroup: studentYear as 1 | 2 | 3 | 4,
-              senderName: 'Hostel System Automation',
-              senderRole: 'System Automation',
-              message: `🚨 AUTOMATED BIOMETRIC NOTICE: Student ${student.name} (${student.rollNo}, Room ${student.roomNumber}) missed the evening biometric cutoff punch. Please report to Warden Office.`,
-              timestamp: `${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-              isAutomatedMissedNotice: true,
-              flaggedStudentName: student.name,
-              flaggedStudentRoll: student.rollNo,
-              flaggedStudentRoom: student.roomNumber
+      setRooms(
+        rooms.map((r) =>
+          r.id === existingRoom.id
+            ? { ...r, occupants: [...currentOccupants, newOccupant] }
+            : r
+        )
+      );
+
+      return {
+        success: true,
+        message: `✅ Allotted to Room ${existingRoom.roomNumber} (${currentOccupants.length + 1}/${existingRoom.capacity} Beds).`
+      };
+    } else {
+      const newRoom: Room = {
+        id: `${block.toLowerCase()}-${Date.now()}`,
+        block,
+        roomNumber: cleanRoomNo,
+        floor: parseInt(cleanRoomNo.replace(/\D/g, '')[0] || '1', 10) || 1,
+        capacity: 2,
+        facilities: ['High-Speed LAN', 'Balcony', 'Study Desks'],
+        isMaintained: true,
+        occupants: [{ ...studentData, id: `std-${Date.now()}` }]
+      };
+
+      setRooms([...rooms, newRoom]);
+      return {
+        success: true,
+        message: `✅ New Room ${cleanRoomNo} created & Student Allotted!`
+      };
+    }
+  };
+
+  // 🟢 2. RE-ALLOT ON STUDENT EDIT (Move from Old Room to New Room)
+  const handleReallotStudentRoom = (oldRoomNumber: string, newRoomNumber: string, block: BlockName, studentData: any) => {
+    const cleanOldRoom = oldRoomNumber.trim();
+    const cleanNewRoom = newRoomNumber.trim();
+
+    // If room didn't change, just update occupant profile
+    if (cleanOldRoom.toLowerCase() === cleanNewRoom.toLowerCase()) {
+      setRooms(
+        rooms.map((r) => {
+          if (r.roomNumber.toLowerCase() === cleanOldRoom.toLowerCase() && r.occupants) {
+            return {
+              ...r,
+              occupants: r.occupants.map((occ) =>
+                occ.rollNo.toUpperCase() === studentData.rollNo.toUpperCase()
+                  ? { ...occ, ...studentData }
+                  : occ
+              )
             };
-
-            setYearGroupMessages((prev) => [autoMsg, ...prev]);
           }
-        }
-      });
-    }, 60000);
+          return r;
+        })
+      );
+      return { success: true, message: 'Profile updated in same room.' };
+    }
 
-    return () => clearInterval(interval);
-  }, [attendanceSummaries, timingConfig, yearGroupMessages]);
+    // Step A: Check capacity of New Room
+    const targetNewRoom = rooms.find(
+      (r) => r.roomNumber.toLowerCase() === cleanNewRoom.toLowerCase()
+    );
+
+    if (targetNewRoom) {
+      const occupantsInNew = targetNewRoom.occupants || [];
+      if (occupantsInNew.length >= targetNewRoom.capacity) {
+        return {
+          success: false,
+          message: `⛔ NEW ROOM FULL: Room ${targetNewRoom.roomNumber} is already full (${occupantsInNew.length}/${targetNewRoom.capacity} Beds)! Cannot move student.`
+        };
+      }
+    }
+
+    // Step B: Remove from Old Room & Add to New Room
+    let updatedRoomsList = rooms.map((r) => {
+      // Remove from old room
+      if (r.roomNumber.toLowerCase() === cleanOldRoom.toLowerCase() && r.occupants) {
+        return {
+          ...r,
+          occupants: r.occupants.filter((occ) => occ.rollNo.toUpperCase() !== studentData.rollNo.toUpperCase())
+        };
+      }
+      return r;
+    });
+
+    if (targetNewRoom) {
+      // Add to existing new room
+      updatedRoomsList = updatedRoomsList.map((r) => {
+        if (r.id === targetNewRoom.id) {
+          return {
+            ...r,
+            occupants: [...(r.occupants || []), { ...studentData, id: `std-${Date.now()}` }]
+          };
+        }
+        return r;
+      });
+    } else {
+      // Create new room if it didn't exist
+      const brandNewRoom: Room = {
+        id: `${block.toLowerCase()}-${Date.now()}`,
+        block,
+        roomNumber: cleanNewRoom,
+        floor: parseInt(cleanNewRoom.replace(/\D/g, '')[0] || '1', 10) || 1,
+        capacity: 2,
+        facilities: ['High-Speed LAN', 'Balcony', 'Study Desks'],
+        isMaintained: true,
+        occupants: [{ ...studentData, id: `std-${Date.now()}` }]
+      };
+      updatedRoomsList.push(brandNewRoom);
+    }
+
+    setRooms(updatedRoomsList);
+    return {
+      success: true,
+      message: `✅ Student moved from Room ${cleanOldRoom} to Room ${cleanNewRoom}!`
+    };
+  };
+
+  // 🟢 3. REMOVE OCCUPANT FROM ROOM
+  const handleRemoveOccupantFromRoom = (roomNumber: string, studentRoll: string) => {
+    setRooms(
+      rooms.map((r) => {
+        if (r.occupants) {
+          return {
+            ...r,
+            occupants: r.occupants.filter((occ) => occ.rollNo.toUpperCase() !== studentRoll.toUpperCase())
+          };
+        }
+        return r;
+      })
+    );
+  };
 
   if (!userSession) {
     return <LoginPage onLogin={(session) => setUserSession(session)} />;
@@ -215,7 +328,6 @@ export default function App() {
 
   const role = userSession.role;
 
-  // 🟢 3. DEDICATED GUARD SCREEN
   if (role === 'guard') {
     return (
       <GuardTerminal
@@ -254,38 +366,31 @@ export default function App() {
     setUserSession(null);
   };
 
-  // 🟢 4. STUDENT APPLIES PASS -> SAVES INSTANTLY TO GOOGLE CLOUD
   const handleApplyLeavePass = async (
     newPassData: Omit<HomeLeavePass, 'id' | 'createdAt' | 'status' | 'parentSmsSent'>
   ) => {
     const newPass: HomeLeavePass = {
       ...newPassData,
       id: `pass-${Date.now()}`,
-      status: 'Applied', // 👈 Pending for Warden
+      status: 'Applied',
       parentSmsSent: false,
       createdAt: new Date().toISOString()
     };
 
-    // Save to Cloud Firestore
     await hostelDB.savePassToCloud(newPass);
-
-    // Update local state instantly
     setLeavePasses((prev) => [newPass, ...prev.filter((p) => p.id !== newPass.id)]);
   };
 
-  // 🟢 5. WARDEN APPROVES PASS -> UPDATES IN GOOGLE CLOUD
   const handleUpdateLeaveStatus = async (id: string, status: LeaveStatus) => {
     if (role !== 'warden') return;
 
     const generatedToken = `WDN-SEAL-${Math.floor(1000 + Math.random() * 9000)}-AUTHENTICATED`;
 
-    // Update in Cloud Firestore
     await hostelDB.updatePassStatusInCloud(id, status, {
       verificationToken: generatedToken,
       wardenApprovedBy: 'Chief Warden Office'
     });
 
-    // Update local state
     setLeavePasses((prev) =>
       prev.map((p) =>
         p.id === id
@@ -295,7 +400,6 @@ export default function App() {
     );
   };
 
-  // 🟢 6. GATE GUARD SCAN LOGS -> SAVES TO CLOUD
   const handleRecordGateScan = async (id: string, action: 'EXITED' | 'RE_ENTERED', guardName: string = 'Main Gate Security Guard') => {
     const now = new Date();
     const nowStr = `${now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -555,8 +659,15 @@ export default function App() {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Tab: Student Admission Manager */}
         {activeTab === 'students' && (role === 'warden' || role === 'college_admin') && (
-          <StudentManager role={role} />
+          <StudentManager
+            role={role}
+            rooms={rooms}
+            onAutoAllotToRoom={handleAutoAllotToRoom}
+            onReallotStudentRoom={handleReallotStudentRoom}
+            onRemoveOccupantFromRoom={handleRemoveOccupantFromRoom}
+          />
         )}
 
         {activeTab === 'leave' && (
@@ -585,7 +696,13 @@ export default function App() {
         {activeTab === 'rooms' && (
           <div className="space-y-8">
             {(role === 'warden' || role === 'college_admin') && (
-              <StudentManager role={role} />
+              <StudentManager
+                role={role}
+                rooms={rooms}
+                onAutoAllotToRoom={handleAutoAllotToRoom}
+                onReallotStudentRoom={handleReallotStudentRoom}
+                onRemoveOccupantFromRoom={handleRemoveOccupantFromRoom}
+              />
             )}
 
             <RoomOccupancySection
