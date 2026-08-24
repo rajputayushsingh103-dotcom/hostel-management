@@ -13,6 +13,7 @@ import { MediaModal } from './components/MediaModal';
 import { YearGroupsSection } from './components/YearGroupsSection';
 import { StudentManager } from './components/StudentManager';
 import { GuardTerminal } from './components/GuardTerminal'; // 👈 Dedicated Guard Scanner
+import { hostelDB } from './data/hostelDB'; // 👈 Cloud DB Connector
 import {
   INITIAL_MESS_MENU,
   INITIAL_ROOMS,
@@ -82,6 +83,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_ALERTS;
   });
 
+  // 🟢 1. GATE PASSES STATE (Synced with Google Cloud Firestore)
   const [leavePasses, setLeavePasses] = useState<HomeLeavePass[]>(() => {
     const saved = localStorage.getItem('hostel_leave_passes');
     return saved ? JSON.parse(saved) : INITIAL_LEAVE_PASSES;
@@ -109,6 +111,17 @@ export default function App() {
 
   const [activeMedia, setActiveMedia] = useState<ComplaintMedia | null>(null);
 
+  // 🟢 2. REAL-TIME CLOUD LISTENER FOR GATE PASSES (Instant Multi-Device Sync)
+  useEffect(() => {
+    const unsubscribe = hostelDB.subscribeToPasses((cloudPasses) => {
+      if (cloudPasses && cloudPasses.length > 0) {
+        setLeavePasses(cloudPasses);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Sync to localStorage
   useEffect(() => {
     if (userSession) {
       localStorage.setItem('hostel_user_session', JSON.stringify(userSession));
@@ -202,32 +215,27 @@ export default function App() {
 
   const role = userSession.role;
 
-  // 🟢 1. DEDICATED GUARD SCREEN (NO NAVBAR, DIRECT SCANNER TERMINAL)
+  // 🟢 3. DEDICATED GUARD SCREEN
   if (role === 'guard') {
     return (
       <GuardTerminal
         leavePasses={leavePasses}
-        onRecordGateScan={(id, action, guardName) => {
+        onRecordGateScan={async (id, action, guardName) => {
           const now = new Date();
           const nowStr = `${now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
-          setLeavePasses(
-            leavePasses.map((p) => {
-              if (p.id === id) {
-                const currentLogs = p.gateScanLogs || [];
-                const newCount = (p.gateMovementCount || 0) + 1;
-                const newLog = { timestamp: nowStr, action, verifiedByGuard: guardName || 'Main Gate Guard' };
-                const newStatus = action === 'EXITED' ? ('Departed' as LeaveStatus) : (action === 'RE_ENTERED' && p.passCategory === 'Outstation Vacation' ? ('Returned' as LeaveStatus) : p.status);
-                return {
-                  ...p,
-                  status: newStatus,
-                  gateMovementCount: newCount,
-                  gateScanLogs: [newLog, ...currentLogs]
-                };
-              }
-              return p;
-            })
-          );
+          const targetPass = leavePasses.find((p) => p.id === id);
+          if (!targetPass) return;
+
+          const currentLogs = targetPass.gateScanLogs || [];
+          const newCount = (targetPass.gateMovementCount || 0) + 1;
+          const newLog = { timestamp: nowStr, action, verifiedByGuard: guardName || 'Main Gate Guard' };
+          const newStatus = action === 'EXITED' ? ('Departed' as LeaveStatus) : (action === 'RE_ENTERED' && targetPass.passCategory === 'Outstation Vacation' ? ('Returned' as LeaveStatus) : targetPass.status);
+
+          await hostelDB.updatePassStatusInCloud(id, newStatus, {
+            gateMovementCount: newCount,
+            gateScanLogs: [newLog, ...currentLogs]
+          });
         }}
         userSession={userSession}
         onLogout={() => setUserSession(null)}
@@ -246,63 +254,64 @@ export default function App() {
     setUserSession(null);
   };
 
-  const handleApplyLeavePass = (
+  // 🟢 4. STUDENT APPLIES PASS -> SAVES INSTANTLY TO GOOGLE CLOUD
+  const handleApplyLeavePass = async (
     newPassData: Omit<HomeLeavePass, 'id' | 'createdAt' | 'status' | 'parentSmsSent'>
   ) => {
-    const now = new Date();
-    const nowStr = `${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-
     const newPass: HomeLeavePass = {
       ...newPassData,
       id: `pass-${Date.now()}`,
-      status: 'Applied',
+      status: 'Applied', // 👈 Pending for Warden
       parentSmsSent: false,
-      createdAt: nowStr
+      createdAt: new Date().toISOString()
     };
 
-    setLeavePasses([newPass, ...leavePasses]);
+    // Save to Cloud Firestore
+    await hostelDB.savePassToCloud(newPass);
+
+    // Update local state instantly
+    setLeavePasses((prev) => [newPass, ...prev.filter((p) => p.id !== newPass.id)]);
   };
 
-  const handleUpdateLeaveStatus = (id: string, status: LeaveStatus) => {
+  // 🟢 5. WARDEN APPROVES PASS -> UPDATES IN GOOGLE CLOUD
+  const handleUpdateLeaveStatus = async (id: string, status: LeaveStatus) => {
     if (role !== 'warden') return;
 
-    setLeavePasses(
-      leavePasses.map((p) => {
-        if (p.id === id) {
-          const generatedToken = p.verificationToken || `WDN-SEAL-${Math.floor(1000 + Math.random() * 9000)}-AUTHENTICATED`;
-          return {
-            ...p,
-            status,
-            verificationToken: status === 'Approved' || p.status === 'Approved' ? generatedToken : p.verificationToken,
-            wardenApprovedBy: 'Chief Warden Office'
-          };
-        }
-        return p;
-      })
+    const generatedToken = `WDN-SEAL-${Math.floor(1000 + Math.random() * 9000)}-AUTHENTICATED`;
+
+    // Update in Cloud Firestore
+    await hostelDB.updatePassStatusInCloud(id, status, {
+      verificationToken: generatedToken,
+      wardenApprovedBy: 'Chief Warden Office'
+    });
+
+    // Update local state
+    setLeavePasses((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? { ...p, status, verificationToken: generatedToken, wardenApprovedBy: 'Chief Warden Office' }
+          : p
+      )
     );
   };
 
-  const handleRecordGateScan = (id: string, action: 'EXITED' | 'RE_ENTERED', guardName: string = 'Main Gate Security Guard') => {
+  // 🟢 6. GATE GUARD SCAN LOGS -> SAVES TO CLOUD
+  const handleRecordGateScan = async (id: string, action: 'EXITED' | 'RE_ENTERED', guardName: string = 'Main Gate Security Guard') => {
     const now = new Date();
     const nowStr = `${now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
-    setLeavePasses(
-      leavePasses.map((p) => {
-        if (p.id === id) {
-          const currentLogs = p.gateScanLogs || [];
-          const newCount = (p.gateMovementCount || 0) + 1;
-          const newLog = { timestamp: nowStr, action, verifiedByGuard: guardName };
-          const newStatus = action === 'EXITED' ? ('Departed' as LeaveStatus) : (action === 'RE_ENTERED' && p.passCategory === 'Outstation Vacation' ? ('Returned' as LeaveStatus) : p.status);
-          return {
-            ...p,
-            status: newStatus,
-            gateMovementCount: newCount,
-            gateScanLogs: [newLog, ...currentLogs]
-          };
-        }
-        return p;
-      })
-    );
+    const targetPass = leavePasses.find((p) => p.id === id);
+    if (!targetPass) return;
+
+    const currentLogs = targetPass.gateScanLogs || [];
+    const newCount = (targetPass.gateMovementCount || 0) + 1;
+    const newLog = { timestamp: nowStr, action, verifiedByGuard: guardName };
+    const newStatus = action === 'EXITED' ? ('Departed' as LeaveStatus) : (action === 'RE_ENTERED' && targetPass.passCategory === 'Outstation Vacation' ? ('Returned' as LeaveStatus) : targetPass.status);
+
+    await hostelDB.updatePassStatusInCloud(id, newStatus, {
+      gateMovementCount: newCount,
+      gateScanLogs: [newLog, ...currentLogs]
+    });
   };
 
   const handleUpdateMenu = (updatedMenu: DayMessMenu[]) => {

@@ -1,5 +1,5 @@
 // src/data/hostelDB.ts
-import { BlockName } from '../types';
+import { BlockName, HomeLeavePass, LeaveStatus } from '../types';
 import { db } from '../firebase';
 import {
   collection,
@@ -23,7 +23,8 @@ export interface StudentRecord {
   registeredAt: string;
 }
 
-const COLLECTION_NAME = 'students';
+const STUDENTS_COLLECTION = 'students';
+const PASSES_COLLECTION = 'gate_passes';
 
 const INITIAL_STUDENTS: StudentRecord[] = [
   {
@@ -53,10 +54,10 @@ const INITIAL_STUDENTS: StudentRecord[] = [
 ];
 
 export const hostelDB = {
-  // 🟢 1. Saare Students Cloud Se Fetch Karna
+  // ---------------- 🟢 1. STUDENTS CLOUD DB ----------------
   getAllStudents: async (): Promise<StudentRecord[]> => {
     try {
-      const colRef = collection(db, COLLECTION_NAME);
+      const colRef = collection(db, STUDENTS_COLLECTION);
       const snapshot = await getDocs(colRef);
       
       if (snapshot.empty) {
@@ -77,9 +78,8 @@ export const hostelDB = {
     }
   },
 
-  // 🟢 2. Realtime Listener (Mobile & Laptop sync)
   subscribeToStudents: (callback: (students: StudentRecord[]) => void) => {
-    const colRef = collection(db, COLLECTION_NAME);
+    const colRef = collection(db, STUDENTS_COLLECTION);
 
     return onSnapshot(
       colRef,
@@ -102,10 +102,9 @@ export const hostelDB = {
     );
   },
 
-  // 🟢 3. Student Add Karna (Face ID ke sath)
   addStudent: async (newStudent: StudentRecord): Promise<void> => {
     const cleanRoll = newStudent.rollNo.trim().toUpperCase();
-    const docRef = doc(db, COLLECTION_NAME, cleanRoll);
+    const docRef = doc(db, STUDENTS_COLLECTION, cleanRoll);
     await setDoc(
       docRef,
       {
@@ -118,21 +117,18 @@ export const hostelDB = {
     );
   },
 
-  // 🟢 4. Student Update Karna
   updateStudent: async (studentId: string, updatedFields: Partial<StudentRecord>): Promise<void> => {
     const cleanId = studentId.trim().toUpperCase();
-    const docRef = doc(db, COLLECTION_NAME, cleanId);
+    const docRef = doc(db, STUDENTS_COLLECTION, cleanId);
     await setDoc(docRef, { ...updatedFields, studentId: cleanId }, { merge: true });
   },
 
-  // 🟢 5. Student Delete Karna
   deleteStudent: async (studentId: string): Promise<void> => {
     const cleanId = studentId.trim().toUpperCase();
-    const docRef = doc(db, COLLECTION_NAME, cleanId);
+    const docRef = doc(db, STUDENTS_COLLECTION, cleanId);
     await deleteDoc(docRef);
   },
 
-  // 🟢 6. Login Authentication
   authenticateStudent: async (rollNo: string, pass: string): Promise<StudentRecord | null> => {
     const list = await hostelDB.getAllStudents();
     const inputRoll = rollNo.trim().toUpperCase();
@@ -152,5 +148,40 @@ export const hostelDB = {
   verifyAdminPassword: (password: string): boolean => {
     const p = password.trim();
     return p === 'admin@123' || p === 'admin123';
+  },
+
+  // ---------------- 🟢 2. GATE PASSES GLOBAL CLOUD DB SYNC ----------------
+
+  // Live Real-Time Listener: Mobile aur Laptop me turant bina refresh kiye pass aayega
+  subscribeToPasses: (callback: (passes: HomeLeavePass[]) => void) => {
+    const colRef = collection(db, PASSES_COLLECTION);
+    return onSnapshot(
+      colRef,
+      (snapshot) => {
+        const list: HomeLeavePass[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push({ id: docSnap.id, ...docSnap.data() } as HomeLeavePass);
+        });
+        // Sort newest first
+        list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        callback(list);
+      },
+      (error) => {
+        console.error('Firestore Passes Sync Error:', error);
+      }
+    );
+  },
+
+  // Save / Apply New Gate Pass to Cloud Database
+  savePassToCloud: async (newPass: HomeLeavePass): Promise<void> => {
+    const passId = newPass.id || `pass-${Date.now()}`;
+    const docRef = doc(db, PASSES_COLLECTION, passId);
+    await setDoc(docRef, { ...newPass, id: passId }, { merge: true });
+  },
+
+  // Update Pass Status (Approve / Reject / Gate Scan) in Cloud Database
+  updatePassStatusInCloud: async (passId: string, status: LeaveStatus, extraData: Partial<HomeLeavePass> = {}): Promise<void> => {
+    const docRef = doc(db, PASSES_COLLECTION, passId);
+    await setDoc(docRef, { status, ...extraData }, { merge: true });
   }
 };
