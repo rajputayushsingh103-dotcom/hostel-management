@@ -1,17 +1,22 @@
-import React from 'react';
+// src/components/Navbar.tsx
+import React, { useState } from 'react';
 import {
+  Menu,
+  X,
+  FileText,
   UtensilsCrossed,
-  Building2,
-  Wrench,
   Fingerprint,
-  UserX,
-  Bell,
-  ShieldCheck,
-  User,
   Users,
-  MessageSquare,
+  Building2,
+  AlertOctagon,
+  MessageSquareWarning,
   LogOut,
-  School
+  ShieldCheck,
+  School,
+  QrCode,
+  User,
+  ChevronRight,
+  Sparkles
 } from 'lucide-react';
 import { Role, UserAuthSession } from '../types';
 
@@ -21,10 +26,10 @@ interface NavbarProps {
   role: Role;
   userSession: UserAuthSession;
   onLogout: () => void;
-  activeAlertCount: number;
-  bunkCount: number;
-  missedBiometricCount: number;
-  activeLeavePassCount: number;
+  activeAlertCount?: number;
+  bunkCount?: number;
+  missedBiometricCount?: number;
+  activeLeavePassCount?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -33,159 +38,335 @@ export const Navbar: React.FC<NavbarProps> = ({
   role,
   userSession,
   onLogout,
-  activeAlertCount,
-  bunkCount,
-  missedBiometricCount,
-  activeLeavePassCount
+  activeAlertCount = 0,
+  bunkCount = 0,
+  missedBiometricCount = 0,
+  activeLeavePassCount = 0
 }) => {
-  const tabs = [
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Categorized Navigation Items with Descriptions
+  const mainFeatures = [
     {
       id: 'leave',
       label: 'Home Pass & Parent Alert',
-      icon: MessageSquare,
+      desc: 'Gate Pass, Night Leave & Outing',
+      icon: FileText,
       badge: activeLeavePassCount > 0 ? activeLeavePassCount : undefined,
-      badgeColor: 'bg-amber-500'
+      badgeColor: 'bg-amber-500 text-slate-950',
+      accent: 'border-amber-500/40 text-amber-400'
     },
     {
       id: 'mess',
-      label: 'Mess Menu',
-      icon: UtensilsCrossed
+      label: 'Mess Menu & Diet Schedule',
+      desc: 'Weekly Breakfast, Lunch & Dinner',
+      icon: UtensilsCrossed,
+      accent: 'border-emerald-500/40 text-emerald-400'
     },
     {
       id: 'attendance',
       label: 'Biometric Attendance & Timing',
+      desc: 'Evening Cutoff & Machine Sync',
       icon: Fingerprint,
       badge: missedBiometricCount > 0 ? missedBiometricCount : undefined,
-      badgeColor: 'bg-rose-500'
+      badgeColor: 'bg-rose-500 text-white',
+      accent: 'border-indigo-500/40 text-indigo-400'
     },
     {
       id: 'groups',
-      label: 'Year-Wise Groups',
-      icon: Users
-    },
-    {
-      id: 'rooms',
-      label: role === 'warden' || role === 'college_admin' ? 'Rooms & Guardian Contact' : 'Room Vacancy',
-      icon: Building2
-    },
-    {
-      id: 'bunk',
-      label: role === 'college_admin' ? 'College Attendance & Bunk Sync' : 'College Bunk Alert',
-      icon: UserX,
-      badge: bunkCount > 0 ? bunkCount : undefined,
-      badgeColor: 'bg-amber-500'
-    },
-    {
-      id: 'complaints',
-      label: 'Complaints',
-      icon: Wrench
-    },
-    {
-      id: 'alerts',
-      label: 'Hostel Alerts',
-      icon: Bell,
-      badge: activeAlertCount > 0 ? activeAlertCount : undefined,
-      badgeColor: 'bg-red-600'
+      label: 'Year-Wise Groups & Broadcast',
+      desc: 'Batchmates Channel & Announcements',
+      icon: Users,
+      accent: 'border-purple-500/40 text-purple-400'
     }
   ];
 
+  const adminFeatures = [
+    {
+      id: 'rooms',
+      label: role === 'warden' || role === 'college_admin' ? 'Rooms & Student Manager' : 'Hostel Room Directory',
+      desc: 'Capacity Setup & Floor Allotment',
+      icon: Building2,
+      accent: 'border-sky-500/40 text-sky-400'
+    },
+    {
+      id: 'bunk',
+      label: 'College Bunk Detection & Alert',
+      desc: 'Class Sheet vs Biometric Cross-check',
+      icon: School,
+      badge: bunkCount > 0 ? bunkCount : undefined,
+      badgeColor: 'bg-rose-600 text-white',
+      accent: 'border-rose-500/40 text-rose-400'
+    },
+    {
+      id: 'complaints',
+      label: 'Maintenance Complaints',
+      desc: 'Electrical, Plumbing & Wi-Fi Issues',
+      icon: MessageSquareWarning,
+      accent: 'border-teal-500/40 text-teal-400'
+    },
+    {
+      id: 'alerts',
+      label: 'Official Notices & Circulars',
+      desc: 'Chief Warden Urgent Broadcasts',
+      icon: AlertOctagon,
+      badge: activeAlertCount > 0 ? activeAlertCount : undefined,
+      badgeColor: 'bg-indigo-500 text-white',
+      accent: 'border-blue-500/40 text-blue-400'
+    }
+  ];
+
+  const allItems = [...mainFeatures, ...adminFeatures];
+  const currentItem = allItems.find((item) => item.id === activeTab) || allItems[0];
+
   return (
-    <header className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800 shadow-md">
-      {/* Top Banner Bar */}
-      <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 px-4 py-2 text-xs text-indigo-200 border-b border-indigo-900/40 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center space-x-2">
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-            Hostel SuperApp & Parent SMS Safety System
-          </span>
-          <span className="hidden sm:inline text-slate-400">•</span>
-          <span className="hidden sm:inline font-medium text-slate-300">
-            Tagore Block • Tilak Block • Subhash Block
-          </span>
-        </div>
-
-        {/* User Session Bar & Logout */}
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center gap-2 bg-slate-950 px-3 py-1 rounded-lg border border-slate-800 text-xs">
-            {role === 'student' ? (
-              <User className="w-3.5 h-3.5 text-indigo-400" />
-            ) : role === 'college_admin' ? (
-              <School className="w-3.5 h-3.5 text-amber-400" />
-            ) : (
-              <ShieldCheck className="w-3.5 h-3.5 text-red-400" />
-            )}
-            <span className="font-semibold text-white">
-              {userSession.name}
-              {userSession.rollNo ? ` (${userSession.rollNo})` : ''}
-            </span>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
-              {role === 'student' ? userSession.roomNumber || 'Tagore-101' : role === 'college_admin' ? 'College Admin' : 'Warden Admin'}
-            </span>
-          </div>
-
-          <button
-            onClick={onLogout}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all"
-            title="Switch User / Logout"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Logout</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Main Header Nav */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo & Main Title */}
-          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setActiveTab('leave')}>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-              <Building2 className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold text-white tracking-tight">HostelHub</h1>
-                <span className="text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-                  Parent SMS Alert Active
-                </span>
+    <>
+      {/* 🟢 TOP HEADER BAR */}
+      <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 shadow-2xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          
+          {/* Left: 3-Line Hamburger Trigger Button */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="px-3 py-2 rounded-2xl bg-gradient-to-r from-indigo-950/60 to-slate-900 hover:from-indigo-900/80 hover:to-indigo-950 text-white border border-indigo-500/30 hover:border-indigo-400/60 transition-all shadow-lg flex items-center gap-2.5 group"
+              title="Open Navigation Menu"
+            >
+              <div className="p-1 rounded-lg bg-indigo-600 text-white group-hover:scale-105 transition-transform shadow-md">
+                <Menu className="w-4 h-4" />
               </div>
-              <p className="text-xs text-slate-400 font-medium">
-                {role === 'warden' ? 'Warden Administrative Control Portal' : role === 'college_admin' ? 'College Academic Administration Portal' : 'Student Access Portal'}
-              </p>
+              <span className="text-xs font-bold text-slate-200 group-hover:text-white">Menu</span>
+            </button>
+
+            <div className="flex items-center gap-2.5 pl-3 border-l border-slate-800">
+              <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-md shadow-indigo-600/30">
+                H
+              </div>
+              <div>
+                <h1 className="text-sm font-black text-white tracking-tight flex items-center gap-2">
+                  HostelHub Portal
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-900 text-indigo-300 border border-slate-800">
+                    {currentItem.label}
+                  </span>
+                </h1>
+              </div>
             </div>
           </div>
+
+          {/* Right User Bar */}
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs shadow-inner">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-slate-300 font-semibold">{userSession.block || 'Hostel'} Block</span>
+            </div>
+
+            <button
+              onClick={onLogout}
+              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-red-950/50 text-slate-300 hover:text-red-400 border border-slate-800 hover:border-red-500/40 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
+          </div>
         </div>
+      </header>
 
-        {/* Nav Tabs */}
-        <nav className="flex space-x-1 sm:space-x-2 overflow-x-auto py-2 no-scrollbar border-t border-slate-800/60">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`relative flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-                  isActive
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                }`}
-              >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                <span>{tab.label}</span>
+      {/* 🟢 PROFESSIONAL VERTICAL SIDEBAR DRAWER */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          {/* Backdrop Blur Overlay */}
+          <div
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity animate-fadeIn"
+          />
 
-                {tab.badge !== undefined && (
-                  <span
-                    className={`ml-1 px-1.5 py-0.5 text-[10px] font-bold text-white rounded-full ${tab.badgeColor} animate-pulse`}
-                  >
-                    {tab.badge}
+          {/* Vertical Menu Container */}
+          <div className="relative w-84 max-w-[88vw] bg-slate-950 border-r border-slate-800/90 shadow-2xl flex flex-col justify-between z-10 animate-slideIn">
+            <div>
+              {/* Sidebar Header */}
+              <div className="p-5 bg-gradient-to-b from-slate-900 to-slate-950 border-b border-slate-800/90 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-lg shadow-indigo-600/30 border border-indigo-400/30">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-white tracking-wide">HOSTEL DASHBOARD</h3>
+                    <p className="text-[10px] text-indigo-400 font-semibold">Campus Management Suite</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="p-2 text-slate-400 hover:text-white hover:bg-slate-900 rounded-xl border border-transparent hover:border-slate-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Scrollable Navigation Boxed Cards */}
+              <div className="p-4 space-y-4 overflow-y-auto max-h-[calc(100vh-160px)]">
+                
+                {/* SECTION 1: CORE STUDENT SERVICES */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest px-1 block">
+                    Core Student Services
                   </span>
-                )}
+
+                  <div className="space-y-2">
+                    {mainFeatures.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = activeTab === item.id;
+
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setActiveTab(item.id);
+                            setIsSidebarOpen(false);
+                          }}
+                          className={`w-full p-3 rounded-2xl text-left transition-all relative group flex items-center justify-between border ${
+                            isActive
+                              ? 'bg-gradient-to-r from-indigo-950/90 to-slate-900 border-indigo-500 shadow-xl shadow-indigo-600/20 translate-x-1'
+                              : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800/80 hover:border-slate-700 hover:translate-x-1'
+                          }`}
+                        >
+                          {/* Active Indicator Strip */}
+                          {isActive && (
+                            <div className="absolute left-0 top-3 bottom-3 w-1.5 bg-indigo-500 rounded-r-full shadow-md shadow-indigo-500" />
+                          )}
+
+                          <div className="flex items-center gap-3 pl-1">
+                            <div
+                              className={`p-2.5 rounded-xl border shadow-inner ${
+                                isActive
+                                  ? 'bg-indigo-600 text-white border-indigo-400 shadow-md'
+                                  : 'bg-slate-950 border-slate-800 text-slate-400 group-hover:text-white group-hover:border-slate-700'
+                              }`}
+                            >
+                              <Icon className="w-4 h-4" />
+                            </div>
+
+                            <div>
+                              <p className={`text-xs font-extrabold ${isActive ? 'text-white' : 'text-slate-200 group-hover:text-white'}`}>
+                                {item.label}
+                              </p>
+                              <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
+                                {item.desc}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {item.badge !== undefined && (
+                              <span
+                                className={`text-[10px] font-black px-2 py-0.5 rounded-full shadow-md ${item.badgeColor}`}
+                              >
+                                {item.badge}
+                              </span>
+                            )}
+                            <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isActive ? 'text-indigo-400 translate-x-0.5' : 'text-slate-600 group-hover:text-slate-400'}`} />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* SECTION 2: ADMINISTRATIVE & FACILITIES */}
+                <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                  <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest px-1 block">
+                    Hostel & Campus Facilities
+                  </span>
+
+                  <div className="space-y-2">
+                    {adminFeatures.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = activeTab === item.id;
+
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setActiveTab(item.id);
+                            setIsSidebarOpen(false);
+                          }}
+                          className={`w-full p-3 rounded-2xl text-left transition-all relative group flex items-center justify-between border ${
+                            isActive
+                              ? 'bg-gradient-to-r from-indigo-950/90 to-slate-900 border-indigo-500 shadow-xl shadow-indigo-600/20 translate-x-1'
+                              : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800/80 hover:border-slate-700 hover:translate-x-1'
+                          }`}
+                        >
+                          {isActive && (
+                            <div className="absolute left-0 top-3 bottom-3 w-1.5 bg-indigo-500 rounded-r-full shadow-md shadow-indigo-500" />
+                          )}
+
+                          <div className="flex items-center gap-3 pl-1">
+                            <div
+                              className={`p-2.5 rounded-xl border shadow-inner ${
+                                isActive
+                                  ? 'bg-indigo-600 text-white border-indigo-400 shadow-md'
+                                  : 'bg-slate-950 border-slate-800 text-slate-400 group-hover:text-white group-hover:border-slate-700'
+                              }`}
+                            >
+                              <Icon className="w-4 h-4" />
+                            </div>
+
+                            <div>
+                              <p className={`text-xs font-extrabold ${isActive ? 'text-white' : 'text-slate-200 group-hover:text-white'}`}>
+                                {item.label}
+                              </p>
+                              <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
+                                {item.desc}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {item.badge !== undefined && (
+                              <span
+                                className={`text-[10px] font-black px-2 py-0.5 rounded-full shadow-md ${item.badgeColor}`}
+                              >
+                                {item.badge}
+                              </span>
+                            )}
+                            <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isActive ? 'text-indigo-400 translate-x-0.5' : 'text-slate-600 group-hover:text-slate-400'}`} />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* User Profile Card at Bottom */}
+            <div className="p-4 bg-slate-950 border-t border-slate-800/90 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 text-white flex items-center justify-center font-black shadow-md">
+                  {userSession.name[0]}
+                </div>
+                <div className="truncate max-w-[140px]">
+                  <p className="text-xs font-bold text-white truncate">{userSession.name}</p>
+                  <p className="text-[10px] font-mono text-emerald-400 font-semibold uppercase flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    {role === 'warden' ? 'Chief Warden' : role === 'college_admin' ? 'Admin Desk' : 'Student'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={onLogout}
+                className="p-2.5 bg-slate-900 hover:bg-red-950/60 text-slate-400 hover:text-red-400 rounded-xl border border-slate-800 hover:border-red-500/40 transition-colors"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
               </button>
-            );
-          })}
-        </nav>
-      </div>
-    </header>
+            </div>
+
+          </div>
+        </div>
+      )}
+    </>
   );
 };
