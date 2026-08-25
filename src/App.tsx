@@ -57,6 +57,26 @@ export default function App() {
     return null;
   });
 
+  // 🟢 THEME ENGINE: Sync with HTML <html> tag for Pure Day/Night transition
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    const savedTheme = localStorage.getItem('hostel_theme_mode');
+    return savedTheme ? savedTheme === 'dark' : true;
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDarkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('hostel_theme_mode', isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
+
+  const toggleTheme = () => {
+    setIsDarkMode((prev) => !prev);
+  };
+
   const [activeTab, setActiveTab] = useState<string>('leave');
 
   const [menuList, setMenuList] = useState<DayMessMenu[]>(() => {
@@ -111,6 +131,7 @@ export default function App() {
 
   const [activeMedia, setActiveMedia] = useState<ComplaintMedia | null>(null);
 
+  // Realtime Cloud Passes Sync
   useEffect(() => {
     const unsubscribe = hostelDB.subscribeToPasses((cloudPasses) => {
       if (cloudPasses && cloudPasses.length > 0) {
@@ -120,6 +141,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Sync to localStorage
   useEffect(() => {
     if (userSession) {
       localStorage.setItem('hostel_user_session', JSON.stringify(userSession));
@@ -168,7 +190,7 @@ export default function App() {
     localStorage.setItem('hostel_outing_rules', JSON.stringify(outingRules));
   }, [outingRules]);
 
-  // 🟢 1. AUTO ALLOT ON ADMISSION
+  // AUTO ALLOT ROOM ON ADMISSION
   const handleAutoAllotToRoom = (roomNumber: string, block: BlockName, studentData: any) => {
     const cleanRoomNo = roomNumber.trim();
     const existingRoom = rooms.find(
@@ -177,7 +199,6 @@ export default function App() {
 
     if (existingRoom) {
       const currentOccupants = existingRoom.occupants || [];
-      
       if (currentOccupants.length >= existingRoom.capacity) {
         return {
           success: false,
@@ -222,12 +243,11 @@ export default function App() {
     }
   };
 
-  // 🟢 2. RE-ALLOT ON STUDENT EDIT (Move from Old Room to New Room)
+  // RE-ALLOT ON STUDENT EDIT
   const handleReallotStudentRoom = (oldRoomNumber: string, newRoomNumber: string, block: BlockName, studentData: any) => {
     const cleanOldRoom = oldRoomNumber.trim();
     const cleanNewRoom = newRoomNumber.trim();
 
-    // If room didn't change, just update occupant profile
     if (cleanOldRoom.toLowerCase() === cleanNewRoom.toLowerCase()) {
       setRooms(
         rooms.map((r) => {
@@ -247,7 +267,6 @@ export default function App() {
       return { success: true, message: 'Profile updated in same room.' };
     }
 
-    // Step A: Check capacity of New Room
     const targetNewRoom = rooms.find(
       (r) => r.roomNumber.toLowerCase() === cleanNewRoom.toLowerCase()
     );
@@ -257,14 +276,12 @@ export default function App() {
       if (occupantsInNew.length >= targetNewRoom.capacity) {
         return {
           success: false,
-          message: `⛔ NEW ROOM FULL: Room ${targetNewRoom.roomNumber} is already full (${occupantsInNew.length}/${targetNewRoom.capacity} Beds)! Cannot move student.`
+          message: `⛔ NEW ROOM FULL: Room ${targetNewRoom.roomNumber} is already full (${occupantsInNew.length}/${targetNewRoom.capacity} Beds)!`
         };
       }
     }
 
-    // Step B: Remove from Old Room & Add to New Room
     let updatedRoomsList = rooms.map((r) => {
-      // Remove from old room
       if (r.roomNumber.toLowerCase() === cleanOldRoom.toLowerCase() && r.occupants) {
         return {
           ...r,
@@ -275,7 +292,6 @@ export default function App() {
     });
 
     if (targetNewRoom) {
-      // Add to existing new room
       updatedRoomsList = updatedRoomsList.map((r) => {
         if (r.id === targetNewRoom.id) {
           return {
@@ -286,7 +302,6 @@ export default function App() {
         return r;
       });
     } else {
-      // Create new room if it didn't exist
       const brandNewRoom: Room = {
         id: `${block.toLowerCase()}-${Date.now()}`,
         block,
@@ -307,7 +322,6 @@ export default function App() {
     };
   };
 
-  // 🟢 3. REMOVE OCCUPANT FROM ROOM
   const handleRemoveOccupantFromRoom = (roomNumber: string, studentRoll: string) => {
     setRooms(
       rooms.map((r) => {
@@ -645,13 +659,17 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
+    <div className={`min-h-screen font-sans transition-colors duration-200 ${
+      isDarkMode ? 'bg-[#0B1220] text-[#F8FAFC]' : 'bg-[#FFFFFF] text-[#000000]'
+    }`}>
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         role={role}
         userSession={userSession}
         onLogout={handleLogout}
+        isDarkMode={isDarkMode}
+        onToggleTheme={toggleTheme}
         activeAlertCount={activeAlertCount}
         bunkCount={bunkCount}
         missedBiometricCount={missedBiometricCount}

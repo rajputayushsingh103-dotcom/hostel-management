@@ -1,1 +1,131 @@
 @import "tailwindcss";
+
+:root {
+  --bg-color: #FFFFFF;
+  --card-bg: #FFFFFF;
+  --card-sub-bg: #F1F5F9;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --border-color: #E2E8F0;
+  --input-bg: #FFFFFF;
+  color-scheme: light;
+}
+
+html.dark,
+body.dark,
+.dark {
+  --bg-color: #0B1220;
+  --card-bg: #162235;
+  --card-sub-bg: #0E1726;
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --border-color: #1E2D44;
+  --input-bg: #0B1220;
+  color-scheme: dark;
+}
+
+/* 🌟 GLOBAL BODY & APP LEVEL STYLES */
+body {
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  min-height: 100vh;
+}
+
+/* =========================================================
+   ☀️ 1. GLOBAL DAY MODE RULES (Puri website par apply hoga)
+   ========================================================= */
+
+/* Puri website ka base background White */
+html:not(.dark) body,
+html:not(.dark) #root,
+html:not(.dark) main {
+  background-color: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+/* Puri website ke sabhi Cards, Sections aur Containers White */
+html:not(.dark) .bg-slate-900,
+html:not(.dark) .bg-slate-950,
+html:not(.dark) .bg-\[\#121B2B\],
+html:not(.dark) .bg-\[\#1A1818\],
+html:not(.dark) .bg-\[\#1E1B1C\],
+html:not(.dark) .bg-\[\#121011\] {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+/* Sabhi chhote boxes, pills, tables aur sub-containers */
+html:not(.dark) .bg-slate-900\/80,
+html:not(.dark) .bg-slate-900\/90,
+html:not(.dark) .bg-slate-950\/80,
+html:not(.dark) .bg-slate-950\/70,
+html:not(.dark) .bg-slate-800,
+html:not(.dark) .bg-slate-800\/80,
+html:not(.dark) .bg-slate-800\/70,
+html:not(.dark) .bg-\[\#151F32\],
+html:not(.dark) .bg-\[\#0E1524\],
+html:not(.dark) .bg-\[\#182338\] {
+  background-color: #F1F5F9 !important;
+  border-color: #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+/* Puri website ke Text ko Solid Black/Dark me convert karein */
+html:not(.dark) .text-white,
+html:not(.dark) .text-slate-100,
+html:not(.dark) .text-stone-100 {
+  color: #0F172A !important;
+}
+
+html:not(.dark) .text-slate-300,
+html:not(.dark) .text-slate-400,
+html:not(.dark) .text-stone-300,
+html:not(.dark) .text-stone-400 {
+  color: #475569 !important;
+}
+
+/* Borders in Day Mode */
+html:not(.dark) .border-slate-800,
+html:not(.dark) .border-slate-700,
+html:not(.dark) .border-stone-800,
+html:not(.dark) .border-slate-800\/80,
+html:not(.dark) .border-slate-800\/90 {
+  border-color: #E2E8F0 !important;
+}
+
+/* Sabhi Inputs, Forms aur Select Boxes in Day Mode */
+html:not(.dark) input:not([type="checkbox"]):not([type="radio"]),
+html:not(.dark) textarea,
+html:not(.dark) select {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+  border-color: #CBD5E1 !important;
+}
+
+/* =========================================================
+   🌙 2. GLOBAL NIGHT MODE RULES (Dark/Night button dabane par)
+   ========================================================= */
+
+html.dark body,
+html.dark #root {
+  background-color: #0B1220 !important;
+  color: #F8FAFC !important;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.3);
+  border-radius: 9999px;
+}
