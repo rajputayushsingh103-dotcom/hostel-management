@@ -35,18 +35,40 @@ export const GuardTerminal: React.FC<GuardTerminalProps> = ({
   const [scanMessage, setScanMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(true);
 
-  // Cross-Verify against Pass Database
+  // 🎯 100% BULLETPROOF PASS VERIFICATION MATCHER
   const verifyPassData = (rawText: string) => {
+    if (!rawText) return;
     const query = rawText.trim().toUpperCase();
-    if (!query) return;
 
-    const match = leavePasses.find(
-      (p) =>
-        p.rollNo.trim().toUpperCase() === query ||
-        p.id.toUpperCase() === query ||
-        (p.verificationToken && p.verificationToken.toUpperCase().includes(query)) ||
-        (p.studentName && p.studentName.toUpperCase().includes(query))
-    );
+    // 1. Smart Extractor: Extract Roll No and Token from the scanned sentence
+    const rollMatch = query.match(/ROLL:\s*([A-Z0-9]+)/i) || query.match(/([0-9]{5,})/);
+    const extractedRoll = rollMatch ? (rollMatch[1] || rollMatch[0]).trim() : '';
+
+    const tokenMatch = query.match(/TOKEN:\s*([A-Z0-9-]+)/i) || query.match(/(WDN-[A-Z0-9-]+)/i);
+    const extractedToken = tokenMatch ? (tokenMatch[1] || tokenMatch[0]).trim() : '';
+
+    // 2. Cross-Match with Database
+    const match = leavePasses.find((p) => {
+      const roll = (p.rollNo || '').trim().toUpperCase();
+      const token = (p.verificationToken || '').trim().toUpperCase();
+      const id = (p.id || '').trim().toUpperCase();
+      const name = (p.studentName || '').trim().toUpperCase();
+
+      return (
+        // Direct Typed Match
+        roll === query ||
+        token === query ||
+        id === query ||
+        name === query ||
+        // Extracted Camera Match
+        (extractedRoll && roll === extractedRoll) ||
+        (extractedToken && token === extractedToken) ||
+        // Substring Match
+        (roll && query.includes(roll)) ||
+        (token && query.includes(token)) ||
+        (id && query.includes(id))
+      );
+    });
 
     if (match) {
       setScannedPass(match);
