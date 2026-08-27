@@ -574,7 +574,18 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                 </h2>
                 <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-slate-400 mt-1">
                   <span>Today: <strong className="text-indigo-400 font-bold">{todayDayName}</strong></span>
-                  <span>• You are: <strong className="text-emerald-400">{studentYear}{studentYear === 1 ? 'st' : studentYear === 2 ? 'nd' : studentYear === 3 ? 'rd' : 'th'} Year</strong></span>
+                  
+                  {/* 🟢 Role ke hisaab se sahi text aayega */}
+                  {role === 'student' && (
+                    <span>• You are: <strong className="text-emerald-400">{studentYear}{studentYear === 1 ? 'st' : studentYear === 2 ? 'nd' : studentYear === 3 ? 'rd' : 'th'} Year</strong></span>
+                  )}
+                  {role === 'warden' && (
+                    <span>• Access: <strong className="text-amber-400 font-bold">Chief Warden Office</strong></span>
+                  )}
+                  {role === 'college_admin' && (
+                    <span>• Access: <strong className="text-amber-400 font-bold">College Administration</strong></span>
+                  )}
+
                   <span className="inline-flex items-center gap-1 text-[11px] font-mono bg-emerald-500/10 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/20">
                     <Globe className="w-3 h-3 text-emerald-400" />
                     Lucknow IST ({currentIST.formatted12Time})
