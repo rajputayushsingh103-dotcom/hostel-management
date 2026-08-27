@@ -1,6 +1,7 @@
 // src/App.tsx
 import React, { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
+import { MissedAttendanceManager } from './components/MissedAttendanceManager';
 import { LoginPage } from './components/LoginPage';
 import { HomeLeaveSection } from './components/HomeLeaveSection';
 import { MessMenuSection } from './components/MessMenuSection';
@@ -241,6 +242,25 @@ export default function App() {
         message: `✅ New Room ${cleanRoomNo} created & Student Allotted!`
       };
     }
+  };
+
+// 🎯 Push Notice Handler (Only Name + Face ID)
+  const handlePushMissedAttendanceNotice = (yearGroup: 1 | 2 | 3 | 4, studentName: string, faceId: string) => {
+    const now = new Date();
+    const timeStr = `${now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+    const missedMsg: YearGroupMessage = {
+      id: `auto-${Date.now()}`,
+      yearGroup,
+      senderName: 'Hostel System Automation',
+      senderRole: 'System Automation',
+      message: `🚨 MISSED BIOMETRIC ATTENDANCE ALERT:\n👤 Student Name: ${studentName}\n🆔 Biometric Face ID: ${faceId}\n\n⚠️ Turant Main Gate par jakar apna Biometric Face ID punch karein.`,
+      timestamp: timeStr,
+      isAutomatedMissedNotice: true,
+      flaggedStudentName: studentName
+    };
+
+    setYearGroupMessages((prev) => [missedMsg, ...prev]);
   };
 
   // RE-ALLOT ON STUDENT EDIT
@@ -750,18 +770,42 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'attendance' && (
-          <AttendanceSection
-            summaries={attendanceSummaries}
-            onToggleBiometricToday={handleToggleBiometricToday}
-            onExcuseMissedDate={handleExcuseMissedDate}
-            role={role}
-            userSession={userSession}
-            timingConfig={timingConfig}
-            onUpdateTimingConfig={(newTiming) => {
-              if (role === 'warden') setTimingConfig(newTiming);
-            }}
-          />
+       {activeTab === 'attendance' && (
+          <div className="space-y-6">
+            {/* 🎯 Year-Wise Missed Attendance & 1-Click Push Terminal */}
+            <MissedAttendanceManager
+              role={role}
+              onSendNoticeToGroup={(yearGroup, studentName, faceId) => {
+                const now = new Date();
+                const timeStr = `${now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+                const missedMsg: YearGroupMessage = {
+                  id: `auto-${Date.now()}`,
+                  yearGroup,
+                  senderName: 'Hostel System Automation',
+                  senderRole: 'System Automation',
+                  message: `🚨 MISSED BIOMETRIC ATTENDANCE ALERT:\n👤 Student Name: ${studentName}\n🆔 Biometric Face ID: ${faceId}\n\n⚠️ Turant Main Gate par jakar apna Biometric Face ID punch karein.`,
+                  timestamp: timeStr,
+                  isAutomatedMissedNotice: true,
+                  flaggedStudentName: studentName
+                };
+
+                setYearGroupMessages((prev) => [missedMsg, ...prev]);
+              }}
+            />
+
+            <AttendanceSection
+              summaries={attendanceSummaries}
+              onToggleBiometricToday={handleToggleBiometricToday}
+              onExcuseMissedDate={handleExcuseMissedDate}
+              role={role}
+              userSession={userSession}
+              timingConfig={timingConfig}
+              onUpdateTimingConfig={(newTiming) => {
+                if (role === 'warden') setTimingConfig(newTiming);
+              }}
+            />
+          </div>
         )}
 
         {activeTab === 'groups' && (
