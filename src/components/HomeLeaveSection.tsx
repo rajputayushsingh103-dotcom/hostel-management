@@ -28,7 +28,8 @@ import {
   LogOut,
   LogIn,
   Search,
-  RefreshCw
+  RefreshCw,
+  Globe
 } from 'lucide-react';
 import { HomeLeavePass, LeaveStatus, PassCategory, Role, UserAuthSession, OutingRulesConfig, GymMemberRecord, BlockName } from '../types';
 
@@ -71,6 +72,49 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   const [showGymRegistryModal, setShowGymRegistryModal] = useState(false);
   const [viewDigitalPass, setViewDigitalPass] = useState<HomeLeavePass | null>(null);
 
+  // -------------------------------------------------------------
+  // 📍 BULLETPROOF 24-HOUR LUCKNOW (IST) ENGINE (NO AM/PM BUG)
+  // -------------------------------------------------------------
+  const getLucknowISTTimeComponents = () => {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour12: false, // Strict 24-hour format: 0 to 23
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      weekday: 'long',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric'
+    });
+
+    const parts = formatter.formatToParts(now);
+    const timeMap: Record<string, string> = {};
+    parts.forEach((p) => {
+      timeMap[p.type] = p.value;
+    });
+
+    const hour24 = parseInt(timeMap.hour || '0', 10);
+    const minute = parseInt(timeMap.minute || '0', 10);
+    const weekday = timeMap.weekday || 'Thursday';
+    const totalMinutes = hour24 * 60 + minute; // e.g., 17:30 = 1050 mins
+
+    const ampm = hour24 >= 12 ? 'PM' : 'AM';
+    const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+    const formatted12Time = `${String(hour12).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${ampm}`;
+    const formattedFullDate = `${timeMap.year}-${String(timeMap.month).padStart(2, '0')}-${String(timeMap.day).padStart(2, '0')} (${weekday}) ${formatted12Time}`;
+
+    return {
+      hour24,
+      minute,
+      weekday,
+      totalMinutes,
+      formatted12Time,
+      formattedFullDate
+    };
+  };
+
   // 📷 GUARD SCANNER STATES
   const [showGuardScannerModal, setShowGuardScannerModal] = useState(false);
   const [scannerCameraActive, setScannerCameraActive] = useState(false);
@@ -79,7 +123,6 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   const [scanSuccessMessage, setScanSuccessMessage] = useState('');
   const [scanErrorMessage, setScanErrorMessage] = useState('');
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const scanIntervalRef = useRef<number | null>(null);
 
   const [gymMembers, setGymMembers] = useState<GymMemberRecord[]>(() => {
@@ -123,26 +166,18 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [formError, setFormError] = useState('');
 
-  const studentYear = userSession.year || 1;
+  const studentYear = Number(userSession.year || 1);
   const currentStudentRoll = (userSession.rollNo || '').trim().toUpperCase();
   const studentGymRecord = gymMembers.find((g) => g.rollNo.trim().toUpperCase() === currentStudentRoll);
   const isStudentGymMember = role === 'student' && !!studentGymRecord;
 
-  const now = new Date();
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const todayDayName = dayNames[now.getDay()];
-
-  const getLiveDateAndTimeString = () => {
-    const d = new Date();
-    const datePart = d.toISOString().split('T')[0];
-    const timePart = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-    return `${datePart} (${dayNames[d.getDay()]}) ${timePart}`;
-  };
+  const currentIST = getLucknowISTTimeComponents();
+  const todayDayName = currentIST.weekday;
 
   useEffect(() => {
     if (showApplyModal) {
-      setLocalLiveDateTime(getLiveDateAndTimeString());
+      const liveIST = getLucknowISTTimeComponents();
+      setLocalLiveDateTime(liveIST.formattedFullDate);
       setDepDate('');
       setDepTime('10:00 AM');
       setRetDate('');
@@ -155,8 +190,106 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   }, [showApplyModal]);
 
   // -------------------------------------------------------------
-  // 📷 100% SMART REAL-TIME GUARD SCANNER ENGINE
+  // 🔒 100% ACCURATE 24-HOUR IST TIMETABLE AUTHENTICATION ENGINE
   // -------------------------------------------------------------
+  const checkOutingTimeAndDayPermission = (): { isAllowed: boolean; title: string; reason: string } => {
+    // 1. Home Leave is 24x7 Open
+    if (passCategory === 'Outstation Vacation') {
+      return {
+        isAllowed: true,
+        title: '✈️ Home / Outstation Leave: 24x7 Open',
+        reason: 'Requires Chief Warden Office approval.'
+      };
+    }
+
+    const { weekday, totalMinutes, formatted12Time } = getLucknowISTTimeComponents();
+
+    // Morning Slot: 09:00 AM to 12:00 PM (540 to 720 mins)
+    const isMorningSlot = totalMinutes >= 540 && totalMinutes <= 720;
+
+    // Evening Slot: 04:30 PM to 06:00 PM (990 to 1080 mins) [16:30 to 18:00]
+    const isEveningSlot = totalMinutes >= 990 && totalMinutes <= 1080;
+
+    // ==========================================
+    // 1. SUNDAY RULES (Both 1st Year & Seniors Same)
+    // ==========================================
+    if (weekday === 'Sunday') {
+      if (isMorningSlot || isEveningSlot) {
+        return {
+          isAllowed: true,
+          title: `✅ Sunday Application Window Open (${isMorningSlot ? 'Morning 9:00 AM - 12:00 PM' : 'Evening 4:30 PM - 6:00 PM'})`,
+          reason: `Current Time: ${formatted12Time}. Return strictly before 08:00 PM curfew.`
+        };
+      } else {
+        return {
+          isAllowed: false,
+          title: '🔒 Sunday Window Closed',
+          reason: 'Sunday portal opens strictly between 09:00 AM - 12:00 PM and 04:30 PM - 06:00 PM.'
+        };
+      }
+    }
+
+    // ==========================================
+    // 2. 1ST YEAR STUDENTS (Wednesday Evening Only)
+    // ==========================================
+    if (studentYear === 1) {
+      if (weekday === 'Wednesday') {
+        if (isEveningSlot) {
+          return {
+            isAllowed: true,
+            title: '✅ 1st Year Wednesday Window Open (04:30 PM - 06:00 PM)',
+            reason: `Current Time: ${formatted12Time}. Return strictly before 08:00 PM.`
+          };
+        } else {
+          return {
+            isAllowed: false,
+            title: '🔒 1st Year Wednesday Window Closed',
+            reason: 'Allowed only from 04:30 PM to 06:00 PM on Wednesday.'
+          };
+        }
+      } else {
+        return {
+          isAllowed: false,
+          title: `🔒 1st Year Outing Locked on ${weekday}`,
+          reason: '1st Year students are allowed to apply ONLY on Wednesday (4:30-6 PM) & Sunday.'
+        };
+      }
+    }
+
+    // ==========================================
+    // 3. SENIORS (2nd, 3rd, 4th Year)
+    // ==========================================
+    if (studentYear >= 2) {
+      if (weekday === 'Wednesday') {
+        return {
+          isAllowed: false,
+          title: '🔒 Wednesday Restricted for Seniors',
+          reason: '2nd, 3rd & 4th Year students cannot apply for local outing on Wednesday.'
+        };
+      } else {
+        // Mon, Tue, Thu, Fri, Sat (Daily Evening 4:30 PM - 6:00 PM)
+        if (isEveningSlot) {
+          return {
+            isAllowed: true,
+            title: `✅ Senior Evening Window Open (04:30 PM - 06:00 PM)`,
+            reason: `Current Time: ${formatted12Time} IST. Return strictly before 08:00 PM curfew.`
+          };
+        } else {
+          return {
+            isAllowed: false,
+            title: '🔒 Application Window Closed',
+            reason: 'Senior weekday local outing window is strictly 04:30 PM to 06:00 PM IST.'
+          };
+        }
+      }
+    }
+
+    return { isAllowed: false, title: 'Portal Closed', reason: '' };
+  };
+
+  const validation = checkOutingTimeAndDayPermission();
+
+  // Guard Scanner
   const startScannerCamera = async () => {
     setScanErrorMessage('');
     setScanSuccessMessage('');
@@ -174,24 +307,21 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
 
       if ('BarcodeDetector' in window) {
         // @ts-ignore
-        const barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code'] });
+        const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
         scanIntervalRef.current = window.setInterval(async () => {
           if (videoRef.current && videoRef.current.readyState === 4) {
             try {
               // @ts-ignore
-              const barcodes = await barcodeDetector.detect(videoRef.current);
+              const barcodes = await detector.detect(videoRef.current);
               if (barcodes.length > 0) {
-                const rawValue = barcodes[0].rawValue;
-                handleProcessScannedData(rawValue);
+                processRawScannedCode(barcodes[0].rawValue);
               }
-            } catch (err) {
-              // ignore frame read
-            }
+            } catch (e) {}
           }
-        }, 500);
+        }, 400);
       }
     } catch (err) {
-      setScanErrorMessage('Camera access error. Kripya Roll Number manually verify karein.');
+      setScanErrorMessage('Camera error: Roll number manually type karke verify karein.');
       setScannerCameraActive(false);
     }
   };
@@ -204,7 +334,6 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
       stream.getTracks().forEach((track) => track.stop());
-      videoRef.current.srcObject = null;
     }
     setScannerCameraActive(false);
   };
@@ -215,98 +344,60 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
     } else {
       stopScannerCamera();
     }
-    return () => {
-      stopScannerCamera();
-    };
+    return () => stopScannerCamera();
   }, [showGuardScannerModal]);
 
-  // 🎯 SMART PARSER & CLOUD MATCHER (Fixes "No Record Found")
-  const handleProcessScannedData = (scannedText: string) => {
+  const processRawScannedCode = (rawText: string) => {
     setScanErrorMessage('');
-    const raw = scannedText.trim().toUpperCase();
+    setScanSuccessMessage('');
+    const raw = rawText.trim().toUpperCase();
 
-    // 1. Direct Match against leave passes
-    let matchedPass = leavePasses.find((p) => {
-      const pToken = (p.verificationToken || '').toUpperCase();
-      const pRoll = (p.rollNo || '').toUpperCase();
-      const pId = (p.id || '').toUpperCase();
+    let found = leavePasses.find((p) => {
+      const roll = (p.rollNo || '').toUpperCase();
+      const token = (p.verificationToken || '').toUpperCase();
+      const id = (p.id || '').toUpperCase();
 
       return (
-        (pToken && raw.includes(pToken)) ||
-        (pRoll && raw.includes(pRoll)) ||
-        (pId && raw.includes(pId)) ||
-        raw === pRoll ||
-        raw === pToken
+        raw.includes(roll) ||
+        raw.includes(token) ||
+        raw.includes(id) ||
+        roll === raw ||
+        token === raw
       );
     });
 
-    // 2. Fallback parser if scanned text has raw details
-    if (!matchedPass && (raw.includes('HOSTEL_PASS_VERIFIED') || raw.includes('WDN-SEAL'))) {
-      const rollMatch = raw.match(/ROLL:\s*([A-Z0-9]+)/i) || raw.match(/([0-9]{5,})/);
-      const nameMatch = raw.match(/NAME:\s*([A-Z\s]+)/i);
-      const roomMatch = raw.match(/ROOM:\s*([A-Z0-9-]+)/i);
-      const tokenMatch = raw.match(/TOKEN:\s*([A-Z0-9-]+)/i);
-
-      if (rollMatch) {
-        const extractedRoll = rollMatch[1] || rollMatch[0];
-        matchedPass = leavePasses.find((p) => p.rollNo.toUpperCase() === extractedRoll.toUpperCase());
-
-        if (!matchedPass) {
-          matchedPass = {
-            id: `pass-${Date.now()}`,
-            studentId: extractedRoll,
-            studentName: nameMatch ? nameMatch[1].trim() : 'Student',
-            rollNo: extractedRoll,
-            block: 'Tagore',
-            roomNumber: roomMatch ? roomMatch[1].trim() : 'Room',
-            studentPhone: '+91 98765 43210',
-            parentPhone: '+91 98123 45678',
-            destination: 'Official Leave',
-            departureDate: 'Verified',
-            expectedReturnDate: 'Today 08:00 PM',
-            reason: 'Official Gate Pass',
-            status: 'Approved' as LeaveStatus,
-            parentSmsSent: true,
-            verificationToken: tokenMatch ? tokenMatch[1] : 'WDN-SEAL-AUTHENTICATED'
-          };
-        }
-      }
-    }
-
-    if (matchedPass) {
-      setScanResultPass(matchedPass);
-      setScanSuccessMessage(`✅ Verified: ${matchedPass.studentName} (${matchedPass.rollNo})`);
+    if (found) {
+      setVerifiedPass(found);
+      setScanSuccessMessage(`✅ Verified: ${found.studentName} (${found.rollNo})`);
     } else {
-      setScanErrorMessage('❌ NO RECORD FOUND: Pass database me nahi mila. Roll No se manual search karein.');
+      setScanErrorMessage(`❌ NO RECORD FOUND! Scanned Code does not match database.`);
     }
   };
 
-  // Guard Actions: Punch Exit or Punch Entry
-  const handlePunchGateAction = (pass: HomeLeavePass, action: 'EXITED' | 'RE_ENTERED') => {
-    onRecordGateScan(pass.id, action, 'Main Gate Security Guard');
+  const handleGatePunch = (action: 'EXITED' | 'RE_ENTERED') => {
+    if (!verifiedPass) return;
+    onRecordGateScan(verifiedPass.id, action, userSession.name || 'Main Gate Guard');
 
     if (action === 'EXITED') {
-      onUpdateLeaveStatus(pass.id, 'Departed');
-      setScanSuccessMessage(`🚪 EXIT RECORDED: ${pass.studentName} has departed from gate.`);
+      setScanSuccessMessage(`🚪 GATE EXIT RECORDED: ${verifiedPass.studentName} departed.`);
     } else {
-      onUpdateLeaveStatus(pass.id, 'Returned');
-      setScanSuccessMessage(`🏠 ENTRY RECORDED: ${pass.studentName} has returned safely.`);
+      setScanSuccessMessage(`🏠 GATE ENTRY RECORDED: ${verifiedPass.studentName} returned.`);
     }
 
     setTimeout(() => {
-      setScanResultPass(null);
+      setVerifiedPass(null);
       setScanSuccessMessage('');
       setManualTokenInput('');
-    }, 2500);
+    }, 2000);
   };
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualTokenInput.trim()) return;
-    handleProcessScannedData(manualTokenInput);
+    processRawScannedCode(manualTokenInput);
   };
 
-  // Calendar & Application handlers
+  // Calendar
   const handleOpenCalendar = (target: 'departure' | 'return') => {
     setActivePickerTarget(target);
     const baseDate = target === 'return' && retDate ? new Date(retDate) : (depDate ? new Date(depDate) : new Date());
@@ -328,6 +419,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
       setRetDate(selectedCalendarDate);
       setRetTime(formattedTime);
       const selectedObj = new Date(selectedCalendarDate);
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       setHomeReturnDay(dayNames[selectedObj.getDay()]);
     }
     setActivePickerTarget(null);
@@ -336,9 +428,15 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
 
+  // Form Submit with Strict Check
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
+
+    if (passCategory === 'Local Outing' && !validation.isAllowed) {
+      setFormError(`⛔ Application Blocked: ${validation.title} - ${validation.reason}`);
+      return;
+    }
 
     if (!destination.trim()) {
       setFormError('Kripya destination bharein.');
@@ -349,8 +447,10 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
     let finalReturnStr = '';
     let finalReason = '';
 
+    const liveIST = getLucknowISTTimeComponents();
+
     if (passCategory === 'Local Outing') {
-      finalDepartureStr = localLiveDateTime || getLiveDateAndTimeString();
+      finalDepartureStr = localLiveDateTime || liveIST.formattedFullDate;
       finalReturnStr = 'Today strictly before 08:00 PM';
       finalReason = reasonOrAddress.trim() || 'General Local Outing';
     } else {
@@ -358,6 +458,11 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
         setFormError('Ghar jane aur wapas aane ki date select karein!');
         return;
       }
+      if (retDate < depDate) {
+        setFormError('Wapas aane ki date departure ke baad ki honi chahiye!');
+        return;
+      }
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const depObj = new Date(depDate);
       const retObj = new Date(retDate);
       finalDepartureStr = `${depDate} (${dayNames[depObj.getDay()]}) ${depTime}`;
@@ -380,7 +485,7 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
       passCategory: passCategory,
       year: studentYear,
       isGymPass: false,
-      verificationToken: `WDN-SEAL-${Math.floor(1000 + Math.random() * 9000)}-AUTHENTICATED`
+      verificationToken: `WDN-PASS-${Math.floor(1000 + Math.random() * 9000)}-${currentStudentRoll}`
     });
 
     setShowApplyModal(false);
@@ -467,15 +572,19 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
                     </span>
                   )}
                 </h2>
-                <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-                  Today: <strong className="text-indigo-400 font-bold">{todayDayName}</strong> • Real-Time Gate Security Authentication
-                </p>
+                <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-slate-400 mt-1">
+                  <span>Today: <strong className="text-indigo-400 font-bold">{todayDayName}</strong></span>
+                  <span>• You are: <strong className="text-emerald-400">{studentYear}{studentYear === 1 ? 'st' : studentYear === 2 ? 'nd' : studentYear === 3 ? 'rd' : 'th'} Year</strong></span>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-mono bg-emerald-500/10 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                    <Globe className="w-3 h-3 text-emerald-400" />
+                    Lucknow IST ({currentIST.formatted12Time})
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
-            {/* 👮 GUARD / WARDEN QR SCANNER BUTTON */}
             {(role === 'warden' || role === 'college_admin') && (
               <button
                 onClick={() => setShowGuardScannerModal(true)}
@@ -509,32 +618,23 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
         </div>
       </div>
 
-      {/* Filter Tabs for Warden */}
-      {role === 'warden' && (
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-3.5 rounded-2xl">
-          <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-semibold">
-            {['All', 'Applied', 'Approved', 'Departed', 'Returned'].map((st) => (
-              <button
-                key={st}
-                onClick={() => setFilterStatus(st)}
-                className={`px-3.5 py-1.5 rounded-xl transition-all ${
-                  filterStatus === st
-                    ? 'bg-amber-500 text-slate-950 font-bold shadow-md'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                {st === 'Applied' ? `🟡 Pending Approval (${appliedPendingCount})` : st === 'All' ? 'All Gate Passes' : st}
-              </button>
-            ))}
+      {/* Rules Notice Badge */}
+      <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl text-xs text-slate-300 space-y-1">
+        <p className="font-bold text-amber-400 flex items-center gap-1.5">
+          <Clock className="w-4 h-4" />
+          <span>Local Outing Timetable (Lucknow IST Rules):</span>
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px]">
+          <div className="p-2 bg-slate-950 rounded-xl border border-slate-800/80">
+            <span className="font-bold text-indigo-300">1st Year:</span> Wed (4:30-6 PM) & Sun (9 AM-12 PM & 4:30-6 PM). Other days Locked.
           </div>
-
-          <span className="text-xs text-amber-300 font-bold bg-amber-500/10 px-2.5 py-1 rounded-xl border border-amber-500/20">
-            Currently Away: {outOfHostelCount} Students
-          </span>
+          <div className="p-2 bg-slate-950 rounded-xl border border-slate-800/80">
+            <span className="font-bold text-emerald-300">Seniors (2nd, 3rd, 4th Yr):</span> Mon, Tue, Thu, Fri, Sat (4:30-6 PM) & Sun (9-12 & 4:30-6). Wed Locked.
+          </div>
         </div>
-      )}
+      </div>
 
-      {/* PASSES LIST */}
+      {/* Passes List */}
       <div className="space-y-4">
         {visiblePasses.length === 0 ? (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 space-y-3">
@@ -542,206 +642,266 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
             <p className="text-sm font-semibold text-slate-300">No Gate Passes Found</p>
           </div>
         ) : (
-          visiblePasses.map((pass) => {
-            const isApproved = pass.status === 'Approved';
-            const isPending = pass.status === 'Applied';
-            const isDeparted = pass.status === 'Departed';
-            const isReturned = pass.status === 'Returned';
-
-            return (
-              <div
-                key={pass.id}
-                className={`bg-slate-900 border rounded-2xl p-5 shadow-lg transition-all ${
-                  isPending
-                    ? 'border-amber-500/50 bg-gradient-to-r from-amber-950/20 via-slate-900 to-slate-900'
-                    : isApproved
-                    ? 'border-emerald-500/40'
-                    : isDeparted
-                    ? 'border-amber-500/40'
-                    : 'border-slate-800'
-                }`}
-              >
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300">
-                        {pass.block} • Room {pass.roomNumber}
-                      </span>
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300">
-                        {pass.isGymPass ? '💪 Daily Gym Pass' : (pass.passCategory || 'Local Outing')}
-                      </span>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                          isApproved
-                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                            : isDeparted
-                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
-                            : isReturned
-                            ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40'
-                            : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                        }`}
-                      >
-                        Status: {pass.status}
-                      </span>
-                    </div>
-
-                    <h3 className="text-base font-bold text-white flex items-center gap-2">
-                      <User className="w-4 h-4 text-slate-400" />
-                      <span>{pass.studentName} ({pass.rollNo})</span>
-                    </h3>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300">
-                      <div><strong>Destination:</strong> {pass.destination}</div>
-                      <div><strong>Departure:</strong> <span className="font-mono text-emerald-400">{pass.departureDate}</span></div>
-                      <div><strong>Return Cutoff:</strong> <span className="font-mono text-rose-400">{pass.expectedReturnDate}</span></div>
-                      <div className="sm:col-span-2 bg-slate-950 p-2 rounded-lg border border-slate-800">
-                        <strong>Reason / Address:</strong> {pass.reason}
-                      </div>
-                    </div>
+          visiblePasses.map((pass) => (
+            <div
+              key={pass.id}
+              className={`bg-slate-900 border rounded-2xl p-5 shadow-lg ${
+                pass.status === 'Applied'
+                  ? 'border-amber-500/50 bg-gradient-to-r from-amber-950/20 via-slate-900 to-slate-900'
+                  : pass.status === 'Approved'
+                  ? 'border-emerald-500/40'
+                  : pass.status === 'Departed'
+                  ? 'border-amber-500/40'
+                  : 'border-slate-800'
+              }`}
+            >
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300">
+                      {pass.block} • Room {pass.roomNumber}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300">
+                      {pass.isGymPass ? '💪 Daily Gym Pass' : (pass.passCategory || 'Local Outing')}
+                    </span>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        pass.status === 'Approved'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : pass.status === 'Departed'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
+                          : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                      }`}
+                    >
+                      Status: {pass.status}
+                    </span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    {(isApproved || isDeparted || pass.isGymPass) && (
-                      <button
-                        onClick={() => setViewDigitalPass(pass)}
-                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-lg"
-                      >
-                        <QrCode className="w-4 h-4" />
-                        <span>View Verified QR Pass</span>
-                      </button>
-                    )}
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <User className="w-4 h-4 text-slate-400" />
+                    <span>{pass.studentName} ({pass.rollNo})</span>
+                  </h3>
 
-                    {role === 'warden' && isPending && (
-                      <button
-                        onClick={() => {
-                          onUpdateLeaveStatus(pass.id, 'Approved');
-                          alert(`✅ Pass approved for ${pass.studentName}!`);
-                        }}
-                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-lg"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>Approve Pass & Issue QR</span>
-                      </button>
-                    )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300">
+                    <div><strong>Destination:</strong> {pass.destination}</div>
+                    <div><strong>Departure:</strong> <span className="font-mono text-emerald-400">{pass.departureDate}</span></div>
+                    <div><strong>Return Cutoff:</strong> <span className="font-mono text-rose-400">{pass.expectedReturnDate}</span></div>
+                    <div className="sm:col-span-2 bg-slate-950 p-2 rounded-lg border border-slate-800">
+                      <strong>Reason / Address:</strong> {pass.reason}
+                    </div>
                   </div>
                 </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {(pass.status === 'Approved' || pass.status === 'Departed' || pass.isGymPass) && (
+                    <button
+                      onClick={() => setViewDigitalPass(pass)}
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-lg"
+                    >
+                      <QrCode className="w-4 h-4" />
+                      <span>View Verified QR Pass</span>
+                    </button>
+                  )}
+
+                  {role === 'warden' && pass.status === 'Applied' && (
+                    <button
+                      onClick={() => {
+                        onUpdateLeaveStatus(pass.id, 'Approved');
+                        alert(`✅ Pass approved for ${pass.studentName}!`);
+                      }}
+                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-lg"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>Approve Pass & Issue QR</span>
+                    </button>
+                  )}
+                </div>
               </div>
-            );
-          })
+            </div>
+          ))
         )}
       </div>
 
-      {/* 👮 100% FIXED REAL-TIME GUARD GATE SCANNER MODAL */}
-      {showGuardScannerModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
-          <div className="bg-slate-900 border-2 border-emerald-500/60 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Scan className="w-5 h-5 text-emerald-400" />
-                <h3 className="text-base font-bold text-white">Main Gate Security QR Scanner</h3>
-              </div>
-              <button onClick={() => setShowGuardScannerModal(false)} className="text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
+      {/* 🔓 APPLY PASS MODAL */}
+      {showApplyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Send className="w-5 h-5 text-amber-400" />
+                Apply Gate Pass / Outing Request
+              </h3>
+              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                📍 Lucknow IST Live
+              </span>
             </div>
 
-            {/* Camera Viewfinder */}
-            <div className="relative h-56 bg-slate-950 border-2 border-dashed border-emerald-500/40 rounded-2xl overflow-hidden flex flex-col items-center justify-center">
-              <video
-                ref={videoRef}
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
-              <canvas ref={canvasRef} className="hidden" />
-
-              {/* Scanner Line Overlay */}
-              <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-                <div className="w-44 h-44 border-2 border-emerald-400 rounded-2xl relative flex items-center justify-center shadow-[0_0_20px_rgba(52,211,153,0.4)]">
-                  <div className="w-full h-1 bg-emerald-400 shadow-md absolute animate-bounce" />
-                </div>
-                <p className="mt-2 bg-slate-950/80 px-3 py-1 rounded-full text-[11px] font-mono text-emerald-300 border border-slate-800">
-                  Point at Student QR Code
-                </p>
-              </div>
-            </div>
-
-            {/* Quick Manual Token / Roll Search Fallback */}
-            <form onSubmit={handleManualSearch} className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Or Enter Roll No / Token (e.g. 2504221530112)"
-                value={manualTokenInput}
-                onChange={(e) => setManualTokenInput(e.target.value)}
-                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
-              />
-              <button
-                type="submit"
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold"
-              >
-                Verify
-              </button>
-            </form>
-
-            {/* Messages */}
-            {scanSuccessMessage && (
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-semibold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>{scanSuccessMessage}</span>
-              </div>
-            )}
-
-            {scanErrorMessage && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-semibold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{scanErrorMessage}</span>
-              </div>
-            )}
-
-            {/* 🎯 VERIFIED STUDENT GATE PUNCH ACTIONS */}
-            {scanResultPass && (
-              <div className="p-4 bg-slate-950 border-2 border-emerald-500/50 rounded-2xl space-y-3">
-                <div className="flex justify-between items-center text-xs">
-                  <div>
-                    <p className="font-extrabold text-white text-sm">{scanResultPass.studentName}</p>
-                    <p className="text-slate-400 font-mono">Roll: {scanResultPass.rollNo} • Room: {scanResultPass.roomNumber}</p>
-                  </div>
-                  <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 font-bold rounded-lg border border-emerald-500/30 text-[11px]">
-                    {scanResultPass.status}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
-                  <button
-                    onClick={() => handlePunchGateAction(scanResultPass, 'EXITED')}
-                    className="py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-lg"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    <span>Punch Gate EXIT</span>
-                  </button>
-
-                  <button
-                    onClick={() => handlePunchGateAction(scanResultPass, 'RE_ENTERED')}
-                    className="py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-lg"
-                  >
-                    <LogIn className="w-4 h-4" />
-                    <span>Punch Gate ENTRY</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <button
-              onClick={() => setShowGuardScannerModal(false)}
-              className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+            {/* LIVE PERMISSION STATUS BADGE */}
+            <div
+              className={`p-3 rounded-xl border text-xs leading-relaxed ${
+                validation.isAllowed
+                  ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                  : 'bg-rose-950/50 border-rose-500/50 text-rose-300'
+              }`}
             >
-              Close Scanner
-            </button>
+              <p className="font-bold flex items-center gap-1.5">
+                {validation.isAllowed ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <Lock className="w-4 h-4 text-rose-400 shrink-0" />
+                )}
+                <span>Portal Status ({todayDayName} - {studentYear} Year):</span>
+              </p>
+              <p className="text-[11px] mt-1 font-semibold">{validation.title}</p>
+              {validation.reason && (
+                <p className="text-[10px] text-slate-400 mt-0.5">{validation.reason}</p>
+              )}
+            </div>
+
+            {formError && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{formError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleFormSubmit} className="space-y-3.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Student:</label>
+                  <input
+                    type="text"
+                    value={`${userSession.name} (${studentYear} Year)`}
+                    disabled
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Roll & Room:</label>
+                  <input
+                    type="text"
+                    value={`${userSession.rollNo} (${userSession.roomNumber})`}
+                    disabled
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-400"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Pass Type:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['Local Outing', 'Outstation Vacation'] as PassCategory[]).map((cat) => (
+                    <button
+                      type="button"
+                      key={cat}
+                      onClick={() => setPassCategory(cat)}
+                      className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
+                        passCategory === cat
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold'
+                          : 'bg-slate-950 text-slate-300 border-slate-800'
+                      }`}
+                    >
+                      {cat === 'Outstation Vacation' ? 'Home / Night Leave (24x7)' : 'Local Outing (Day)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Destination:</label>
+                <input
+                  type="text"
+                  value={destination}
+                  onChange={(e) => setDestination(e.target.value)}
+                  placeholder={passCategory === 'Outstation Vacation' ? 'e.g. Home / Lucknow' : 'e.g. Hazratganj / Market'}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white"
+                  required
+                />
+              </div>
+
+              {passCategory === 'Local Outing' ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-indigo-400 mb-1">Live Lucknow Departure:</label>
+                    <input
+                      type="text"
+                      value={localLiveDateTime || currentIST.formattedFullDate}
+                      disabled
+                      className="w-full bg-slate-950/80 border border-indigo-500/40 rounded-xl px-3 py-2 text-xs text-emerald-400 font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-rose-400 mb-1">Return Curfew:</label>
+                    <input
+                      type="text"
+                      value="Today strictly before 08:00 PM"
+                      disabled
+                      className="w-full bg-slate-950/80 border border-rose-500/40 rounded-xl px-3 py-2 text-xs text-rose-300 font-mono font-bold"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-indigo-400">Select Travel Dates:</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCalendar('departure')}
+                      className="p-2 bg-slate-950 border border-indigo-500/40 rounded-xl text-xs text-left text-white"
+                    >
+                      {depDate ? `📅 Dep: ${depDate}` : '📅 Departure Date'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCalendar('return')}
+                      className="p-2 bg-slate-950 border border-rose-500/40 rounded-xl text-xs text-left text-white"
+                    >
+                      {retDate ? `📅 Ret: ${retDate}` : '📅 Return Date'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-amber-300 mb-1">
+                  {passCategory === 'Outstation Vacation' ? 'Full Home Address *Mandatory:' : 'Reason (Optional):'}
+                </label>
+                <textarea
+                  value={reasonOrAddress}
+                  onChange={(e) => setReasonOrAddress(e.target.value)}
+                  rows={2}
+                  placeholder={passCategory === 'Outstation Vacation' ? 'Enter complete permanent home address...' : 'e.g. Buying medicines...'}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white"
+                  required={passCategory === 'Outstation Vacation'}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowApplyModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={passCategory === 'Local Outing' && !validation.isAllowed}
+                  className={`px-5 py-2 text-xs font-bold rounded-xl shadow-lg transition-all ${
+                    passCategory === 'Outstation Vacation' || validation.isAllowed
+                      ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                      : 'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700'
+                  }`}
+                >
+                  {passCategory === 'Local Outing' && !validation.isAllowed ? '🔒 Window Locked' : 'Submit Gate Pass'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* STUDENT DIGITAL QR PASS POPUP */}
+      {/* QR PASS MODAL */}
       {viewDigitalPass && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
           <div className="bg-slate-900 border-2 border-emerald-500/60 rounded-3xl max-w-md w-full p-6 shadow-2xl relative overflow-hidden space-y-4">
@@ -788,151 +948,6 @@ export const HomeLeaveSection: React.FC<HomeLeaveSectionProps> = ({
             >
               Close QR Pass
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* APPLY PASS MODAL */}
-      {showApplyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <Send className="w-5 h-5 text-amber-400" />
-              Apply Gate Pass / Outing Request
-            </h3>
-
-            {formError && (
-              <div className="mt-2 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{formError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleFormSubmit} className="mt-4 space-y-3.5">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Student:</label>
-                  <input
-                    type="text"
-                    value={`${userSession.name} (${studentYear} Year)`}
-                    disabled
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Roll & Room:</label>
-                  <input
-                    type="text"
-                    value={`${userSession.rollNo} (${userSession.roomNumber})`}
-                    disabled
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-400"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Pass Type:</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['Local Outing', 'Outstation Vacation'] as PassCategory[]).map((cat) => (
-                    <button
-                      type="button"
-                      key={cat}
-                      onClick={() => setPassCategory(cat)}
-                      className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
-                        passCategory === cat
-                          ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold'
-                          : 'bg-slate-950 text-slate-300 border-slate-800'
-                      }`}
-                    >
-                      {cat === 'Outstation Vacation' ? 'Home / Night Leave' : 'Local Outing (Day)'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Destination:</label>
-                <input
-                  type="text"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  placeholder="e.g. City Market / Home Town"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white"
-                  required
-                />
-              </div>
-
-              {passCategory === 'Local Outing' ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-indigo-400 mb-1">Departure:</label>
-                    <input
-                      type="text"
-                      value={localLiveDateTime || getLiveDateAndTimeString()}
-                      disabled
-                      className="w-full bg-slate-950/80 border border-indigo-500/40 rounded-xl px-3 py-2 text-xs text-emerald-400 font-mono font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-rose-400 mb-1">Return Cutoff:</label>
-                    <input
-                      type="text"
-                      value="Today before 08:00 PM"
-                      disabled
-                      className="w-full bg-slate-950/80 border border-rose-500/40 rounded-xl px-3 py-2 text-xs text-rose-300 font-mono font-bold"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <label className="block text-xs font-semibold text-indigo-400">Select Dates:</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenCalendar('departure')}
-                      className="p-2 bg-slate-950 border border-indigo-500/40 rounded-xl text-xs text-left text-white"
-                    >
-                      {depDate ? `📅 Dep: ${depDate}` : '📅 Departure Date'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenCalendar('return')}
-                      className="p-2 bg-slate-950 border border-rose-500/40 rounded-xl text-xs text-left text-white"
-                    >
-                      {retDate ? `📅 Ret: ${retDate}` : '📅 Return Date'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-bold text-amber-300 mb-1">Reason / Address:</label>
-                <textarea
-                  value={reasonOrAddress}
-                  onChange={(e) => setReasonOrAddress(e.target.value)}
-                  rows={2}
-                  placeholder="Enter reason or home address..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white"
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowApplyModal(false)}
-                  className="px-4 py-2 text-xs text-slate-400 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl shadow-lg"
-                >
-                  Submit Gate Pass
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

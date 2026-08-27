@@ -29,11 +29,13 @@ export const YearGroupsSection: React.FC<YearGroupsSectionProps> = ({
   userSession,
   role
 }) => {
-  const studentYear = userSession.year || 1;
+  const studentYear = (userSession.year && userSession.year >= 1 && userSession.year <= 4
+    ? userSession.year
+    : 1) as 1 | 2 | 3 | 4;
 
-  // Active selected tab group (1, 2, 3, or 4)
+  // Student is locked to their own year; Warden/Admin can switch
   const [selectedGroup, setSelectedGroup] = useState<1 | 2 | 3 | 4>(
-    role === 'student' ? (studentYear as 1 | 2 | 3 | 4) : 1
+    role === 'student' ? studentYear : 1
   );
 
   const [inputMessage, setInputMessage] = useState('');
@@ -52,17 +54,17 @@ export const YearGroupsSection: React.FC<YearGroupsSectionProps> = ({
     4: 'Mess: 08:15 PM - 09:30 PM • Biometric Cutoff: 09:30 PM'
   };
 
-  // Permissions: Only Warden can broadcast
+  // Only Warden can post
   const canPostMessage = role === 'warden';
-  // Admin and Warden can view all groups; Student can only view their own year
-  const hasGroupAccess = role === 'warden' || role === 'college_admin' || selectedGroup === studentYear;
 
-  const currentGroupMessages = messages.filter((m) => m.yearGroup === selectedGroup);
+  // Active messages (Students see only their year)
+  const activeYearGroup = role === 'student' ? studentYear : selectedGroup;
+  const currentGroupMessages = messages.filter((m) => m.yearGroup === activeYearGroup);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim() || !canPostMessage) return;
-    onSendMessage(selectedGroup, inputMessage.trim());
+    onSendMessage(activeYearGroup, inputMessage.trim());
     setInputMessage('');
   };
 
@@ -76,19 +78,27 @@ export const YearGroupsSection: React.FC<YearGroupsSectionProps> = ({
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold mb-2">
               <Users className="w-3.5 h-3.5" />
-              Year-Specific Automated Missed Attendance & Notice Hub
+              {role === 'student' ? `${studentYear}${studentYear === 1 ? 'st' : studentYear === 2 ? 'nd' : studentYear === 3 ? 'rd' : 'th'} Year Community` : 'Hostel Year Groups Hub'}
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-              Hostel Academic Year Groups
+              {role === 'student'
+                ? yearTitles[studentYear]
+                : 'Hostel Academic Year Groups'}
             </h2>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Missed biometric notices are routed automatically to respective year groups.
+              {role === 'student'
+                ? `Official notices and missed biometric attendance updates for ${studentYear}${studentYear === 1 ? 'st' : studentYear === 2 ? 'nd' : studentYear === 3 ? 'rd' : 'th'} Year.`
+                : 'Missed biometric notices are routed automatically to respective year groups.'}
             </p>
           </div>
 
           <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
-              {role === 'college_admin' ? <School className="w-5 h-5 text-amber-400" /> : <ShieldCheck className="w-5 h-5" />}
+              {role === 'college_admin' ? (
+                <School className="w-5 h-5 text-amber-400" />
+              ) : (
+                <ShieldCheck className="w-5 h-5" />
+              )}
             </div>
             <div>
               <p className="text-xs font-bold text-white">Your Portal Role:</p>
@@ -104,52 +114,40 @@ export const YearGroupsSection: React.FC<YearGroupsSectionProps> = ({
         </div>
       </div>
 
-      {/* Year Selection Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {([1, 2, 3, 4] as const).map((yr) => {
-          const isUserYear = role === 'student' && yr === studentYear;
-          const isAccessible = role === 'warden' || role === 'college_admin' || isUserYear;
-          const isSelected = selectedGroup === yr;
+      {/* 🟢 Year Selection Tabs: ONLY FOR WARDEN & ADMIN (Hidden for Students) */}
+      {(role === 'warden' || role === 'college_admin') && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {([1, 2, 3, 4] as const).map((yr) => {
+            const isSelected = selectedGroup === yr;
 
-          return (
-            <button
-              key={yr}
-              onClick={() => setSelectedGroup(yr)}
-              className={`p-4 rounded-2xl border text-left transition-all relative ${
-                isSelected
-                  ? 'bg-slate-900 border-indigo-500 ring-2 ring-indigo-500/30 shadow-lg'
-                  : 'bg-slate-950 border-slate-800 hover:border-slate-700'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-extrabold text-white">
-                  {yr === 1 ? '1st Year' : yr === 2 ? '2nd Year' : yr === 3 ? '3rd Year' : '4th Year'}
-                </span>
+            return (
+              <button
+                key={yr}
+                onClick={() => setSelectedGroup(yr)}
+                className={`p-4 rounded-2xl border text-left transition-all relative ${
+                  isSelected
+                    ? 'bg-slate-900 border-indigo-500 ring-2 ring-indigo-500/30 shadow-lg'
+                    : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-extrabold text-white">
+                    {yr === 1 ? '1st Year' : yr === 2 ? '2nd Year' : yr === 3 ? '3rd Year' : '4th Year'}
+                  </span>
 
-                {isAccessible ? (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> Accessible
+                    <CheckCircle2 className="w-3 h-3" /> Active
                   </span>
-                ) : (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1">
-                    <Lock className="w-3 h-3 text-amber-400" /> Locked
-                  </span>
-                )}
-              </div>
+                </div>
 
-              <p className="text-[11px] text-slate-400 font-medium line-clamp-1">
-                {yr === 1 ? 'Freshers Community' : 'Senior Community'}
-              </p>
-
-              {isUserYear && (
-                <span className="mt-2 inline-block text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded">
-                  Your Year Group
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+                <p className="text-[11px] text-slate-400 font-medium line-clamp-1">
+                  {yr === 1 ? 'Freshers Community' : 'Senior Community'}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Group Chat Container */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col min-h-[500px]">
@@ -160,17 +158,12 @@ export const YearGroupsSection: React.FC<YearGroupsSectionProps> = ({
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                {yearTitles[selectedGroup]}
-                {!hasGroupAccess && (
-                  <span className="text-xs font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <Lock className="w-3 h-3" /> Access Restricted
-                  </span>
-                )}
+              <h3 className="text-base font-bold text-white">
+                {yearTitles[activeYearGroup]}
               </h3>
               <p className="text-xs text-slate-400 font-mono mt-0.5">
                 <Clock className="w-3 h-3 inline mr-1 text-indigo-400" />
-                {yearTimings[selectedGroup]}
+                {yearTimings[activeYearGroup]}
               </p>
             </div>
           </div>
@@ -180,26 +173,13 @@ export const YearGroupsSection: React.FC<YearGroupsSectionProps> = ({
           </div>
         </div>
 
-        {/* Access Warning Bar if Restricted */}
-        {!hasGroupAccess && (
-          <div className="p-4 bg-amber-500/10 border-b border-amber-500/20 text-amber-300 text-xs flex items-start gap-3">
-            <Lock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold text-amber-200">Year Group Isolation Policy:</p>
-              <p className="mt-0.5 text-amber-300/80">
-                You are enrolled in <strong>{studentYear} Year</strong>. You can only view the {studentYear} Year group notice board. Switch to your year tab above.
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* Message Feed */}
         <div className="flex-1 p-4 sm:p-6 space-y-4 overflow-y-auto max-h-[450px]">
           {currentGroupMessages.length === 0 ? (
             <div className="text-center py-12 text-slate-500 space-y-2">
               <MessageSquare className="w-10 h-10 mx-auto text-slate-600" />
               <p className="text-sm font-semibold">No notices or missed attendance records in this group.</p>
-              <p className="text-xs">Missed biometric logs for {yearTitles[selectedGroup]} will appear here.</p>
+              <p className="text-xs">Missed biometric logs for {yearTitles[activeYearGroup]} will appear here.</p>
             </div>
           ) : (
             currentGroupMessages.map((msg) => {
@@ -275,7 +255,7 @@ export const YearGroupsSection: React.FC<YearGroupsSectionProps> = ({
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder={`Post official announcement to ${yearTitles[selectedGroup]}...`}
+                placeholder={`Post official announcement to ${yearTitles[activeYearGroup]}...`}
                 className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
               />
 
