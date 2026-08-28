@@ -1,5 +1,5 @@
 // src/data/hostelDB.ts
-import { BlockName, HomeLeavePass, LeaveStatus } from '../types';
+import { BlockName, HomeLeavePass, LeaveStatus, Room } from '../types';
 import { db } from '../firebase';
 import {
   collection,
@@ -25,6 +25,7 @@ export interface StudentRecord {
 
 const STUDENTS_COLLECTION = 'students';
 const PASSES_COLLECTION = 'gate_passes';
+const ROOMS_COLLECTION = 'hostel_rooms'; // 👈 Cloud Rooms Collection
 
 const INITIAL_STUDENTS: StudentRecord[] = [
   {
@@ -183,5 +184,49 @@ export const hostelDB = {
   updatePassStatusInCloud: async (passId: string, status: LeaveStatus, extraData: Partial<HomeLeavePass> = {}): Promise<void> => {
     const docRef = doc(db, PASSES_COLLECTION, passId);
     await setDoc(docRef, { status, ...extraData }, { merge: true });
+  },
+
+  // ---------------- 🟢 3. 🛏️ ROOM ALLOCATION GLOBAL CLOUD SYNC ----------------
+
+  // Live Real-Time Listener: Har device me Room & Bed Occupancy sync rahegi
+  subscribeToRooms: (callback: (rooms: Room[]) => void) => {
+    const colRef = collection(db, ROOMS_COLLECTION);
+    return onSnapshot(
+      colRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const list: Room[] = [];
+          snapshot.forEach((docSnap) => {
+            list.push({ id: docSnap.id, ...docSnap.data() } as Room);
+          });
+          callback(list);
+        }
+      },
+      (error) => {
+        console.error('Firestore Rooms Sync Error:', error);
+      }
+    );
+  },
+
+  // Rooms aur Occupants ko Cloud Database me Save karna
+  saveAllRoomsToCloud: async (roomsList: Room[]): Promise<void> => {
+    try {
+      for (const room of roomsList) {
+        const docRef = doc(db, ROOMS_COLLECTION, room.id);
+        await setDoc(docRef, room, { merge: true });
+      }
+    } catch (e) {
+      console.error('Cloud Room Save Error:', e);
+    }
+  },
+
+  // Room Delete hone par Cloud se hatana
+  deleteRoomFromCloud: async (roomId: string): Promise<void> => {
+    try {
+      const docRef = doc(db, ROOMS_COLLECTION, roomId);
+      await deleteDoc(docRef);
+    } catch (e) {
+      console.error('Cloud Room Delete Error:', e);
+    }
   }
 };

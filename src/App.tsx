@@ -132,11 +132,22 @@ export default function App() {
 
   const [activeMedia, setActiveMedia] = useState<ComplaintMedia | null>(null);
 
-  // Realtime Cloud Passes Sync
+  // 🟢 1. Realtime Cloud Passes Sync
   useEffect(() => {
     const unsubscribe = hostelDB.subscribeToPasses((cloudPasses) => {
       if (cloudPasses && cloudPasses.length > 0) {
         setLeavePasses(cloudPasses);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 🟢 2. 🛏️ Realtime Cloud Rooms Sync
+  useEffect(() => {
+    const unsubscribe = hostelDB.subscribeToRooms((cloudRooms) => {
+      if (cloudRooms && cloudRooms.length > 0) {
+        setRooms(cloudRooms);
+        localStorage.setItem('hostel_rooms', JSON.stringify(cloudRooms));
       }
     });
     return () => unsubscribe();
@@ -191,12 +202,14 @@ export default function App() {
     localStorage.setItem('hostel_outing_rules', JSON.stringify(outingRules));
   }, [outingRules]);
 
-  // AUTO ALLOT ROOM ON ADMISSION
+  // AUTO ALLOT ROOM ON ADMISSION (Syncs with Cloud)
   const handleAutoAllotToRoom = (roomNumber: string, block: BlockName, studentData: any) => {
     const cleanRoomNo = roomNumber.trim();
     const existingRoom = rooms.find(
       (r) => r.roomNumber.toLowerCase() === cleanRoomNo.toLowerCase() || r.roomNumber.toLowerCase().includes(cleanRoomNo.toLowerCase())
     );
+
+    let updatedRoomsList: Room[] = [];
 
     if (existingRoom) {
       const currentOccupants = existingRoom.occupants || [];
@@ -212,18 +225,11 @@ export default function App() {
         id: `std-${Date.now()}`
       };
 
-      setRooms(
-        rooms.map((r) =>
-          r.id === existingRoom.id
-            ? { ...r, occupants: [...currentOccupants, newOccupant] }
-            : r
-        )
+      updatedRoomsList = rooms.map((r) =>
+        r.id === existingRoom.id
+          ? { ...r, occupants: [...currentOccupants, newOccupant] }
+          : r
       );
-
-      return {
-        success: true,
-        message: `✅ Allotted to Room ${existingRoom.roomNumber} (${currentOccupants.length + 1}/${existingRoom.capacity} Beds).`
-      };
     } else {
       const newRoom: Room = {
         id: `${block.toLowerCase()}-${Date.now()}`,
@@ -236,15 +242,19 @@ export default function App() {
         occupants: [{ ...studentData, id: `std-${Date.now()}` }]
       };
 
-      setRooms([...rooms, newRoom]);
-      return {
-        success: true,
-        message: `✅ New Room ${cleanRoomNo} created & Student Allotted!`
-      };
+      updatedRoomsList = [...rooms, newRoom];
     }
+
+    setRooms(updatedRoomsList);
+    hostelDB.saveAllRoomsToCloud(updatedRoomsList);
+
+    return {
+      success: true,
+      message: `✅ Allotted to Room ${cleanRoomNo} (${existingRoom ? existingRoom.occupants.length + 1 : 1}/${existingRoom ? existingRoom.capacity : 2} Beds).`
+    };
   };
 
-// 🎯 Push Notice Handler (Only Name + Face ID)
+  // 🎯 Push Notice Handler (Only Name + Face ID)
   const handlePushMissedAttendanceNotice = (yearGroup: 1 | 2 | 3 | 4, studentName: string, faceId: string) => {
     const now = new Date();
     const timeStr = `${now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -263,27 +273,27 @@ export default function App() {
     setYearGroupMessages((prev) => [missedMsg, ...prev]);
   };
 
-  // RE-ALLOT ON STUDENT EDIT
+  // RE-ALLOT ON STUDENT EDIT (Syncs with Cloud)
   const handleReallotStudentRoom = (oldRoomNumber: string, newRoomNumber: string, block: BlockName, studentData: any) => {
     const cleanOldRoom = oldRoomNumber.trim();
     const cleanNewRoom = newRoomNumber.trim();
 
     if (cleanOldRoom.toLowerCase() === cleanNewRoom.toLowerCase()) {
-      setRooms(
-        rooms.map((r) => {
-          if (r.roomNumber.toLowerCase() === cleanOldRoom.toLowerCase() && r.occupants) {
-            return {
-              ...r,
-              occupants: r.occupants.map((occ) =>
-                occ.rollNo.toUpperCase() === studentData.rollNo.toUpperCase()
-                  ? { ...occ, ...studentData }
-                  : occ
-              )
-            };
-          }
-          return r;
-        })
-      );
+      const updated = rooms.map((r) => {
+        if (r.roomNumber.toLowerCase() === cleanOldRoom.toLowerCase() && r.occupants) {
+          return {
+            ...r,
+            occupants: r.occupants.map((occ) =>
+              occ.rollNo.toUpperCase() === studentData.rollNo.toUpperCase()
+                ? { ...occ, ...studentData }
+                : occ
+            )
+          };
+        }
+        return r;
+      });
+      setRooms(updated);
+      hostelDB.saveAllRoomsToCloud(updated);
       return { success: true, message: 'Profile updated in same room.' };
     }
 
@@ -336,6 +346,8 @@ export default function App() {
     }
 
     setRooms(updatedRoomsList);
+    hostelDB.saveAllRoomsToCloud(updatedRoomsList);
+
     return {
       success: true,
       message: `✅ Student moved from Room ${cleanOldRoom} to Room ${cleanNewRoom}!`
@@ -343,17 +355,17 @@ export default function App() {
   };
 
   const handleRemoveOccupantFromRoom = (roomNumber: string, studentRoll: string) => {
-    setRooms(
-      rooms.map((r) => {
-        if (r.occupants) {
-          return {
-            ...r,
-            occupants: r.occupants.filter((occ) => occ.rollNo.toUpperCase() !== studentRoll.toUpperCase())
-          };
-        }
-        return r;
-      })
-    );
+    const updated = rooms.map((r) => {
+      if (r.occupants) {
+        return {
+          ...r,
+          occupants: r.occupants.filter((occ) => occ.rollNo.toUpperCase() !== studentRoll.toUpperCase())
+        };
+      }
+      return r;
+    });
+    setRooms(updated);
+    hostelDB.saveAllRoomsToCloud(updated);
   };
 
   if (!userSession) {
@@ -459,14 +471,9 @@ export default function App() {
 
   const handleUpdateRoom = (roomId: string, updatedFields: Partial<Room>) => {
     if (role !== 'warden') return;
-    setRooms(
-      rooms.map((r) => {
-        if (r.id === roomId) {
-          return { ...r, ...updatedFields };
-        }
-        return r;
-      })
-    );
+    const updated = rooms.map((r) => (r.id === roomId ? { ...r, ...updatedFields } : r));
+    setRooms(updated);
+    hostelDB.saveAllRoomsToCloud(updated);
   };
 
   const handleAddRoom = (newRoomData: Omit<Room, 'id' | 'occupants'>) => {
@@ -476,12 +483,16 @@ export default function App() {
       id: `${newRoomData.block.toLowerCase()}-${Date.now()}`,
       occupants: []
     };
-    setRooms([...rooms, newRoom]);
+    const updated = [...rooms, newRoom];
+    setRooms(updated);
+    hostelDB.saveAllRoomsToCloud(updated);
   };
 
   const handleDeleteRoom = (roomId: string) => {
     if (role !== 'warden') return;
-    setRooms(rooms.filter((r) => r.id !== roomId));
+    const updated = rooms.filter((r) => r.id !== roomId);
+    setRooms(updated);
+    hostelDB.deleteRoomFromCloud(roomId);
   };
 
   const handleUpdateOccupant = (
@@ -490,37 +501,32 @@ export default function App() {
     updatedFields: Partial<RoomOccupant>
   ) => {
     if (role !== 'warden') return;
-    setRooms(
-      rooms.map((r) => {
-        if (r.id === roomId) {
-          return {
-            ...r,
-            occupants: r.occupants.map((occ) => {
-              if (occ.id === occupantId) {
-                return { ...occ, ...updatedFields };
-              }
-              return occ;
-            })
-          };
-        }
-        return r;
-      })
-    );
+    const updated = rooms.map((r) => {
+      if (r.id === roomId) {
+        return {
+          ...r,
+          occupants: r.occupants.map((occ) => (occ.id === occupantId ? { ...occ, ...updatedFields } : occ))
+        };
+      }
+      return r;
+    });
+    setRooms(updated);
+    hostelDB.saveAllRoomsToCloud(updated);
   };
 
   const handleRemoveOccupant = (roomId: string, occupantId: string) => {
     if (role !== 'warden') return;
-    setRooms(
-      rooms.map((r) => {
-        if (r.id === roomId) {
-          return {
-            ...r,
-            occupants: r.occupants.filter((occ) => occ.id !== occupantId)
-          };
-        }
-        return r;
-      })
-    );
+    const updated = rooms.map((r) => {
+      if (r.id === roomId) {
+        return {
+          ...r,
+          occupants: r.occupants.filter((occ) => occ.id !== occupantId)
+        };
+      }
+      return r;
+    });
+    setRooms(updated);
+    hostelDB.saveAllRoomsToCloud(updated);
   };
 
   const handleAddOccupant = (roomId: string, occupantData: Omit<RoomOccupant, 'id'>) => {
@@ -529,18 +535,11 @@ export default function App() {
       ...occupantData,
       id: `std-${Date.now()}`
     };
-
-    setRooms(
-      rooms.map((r) => {
-        if (r.id === roomId) {
-          return {
-            ...r,
-            occupants: [...r.occupants, newOccupant]
-          };
-        }
-        return r;
-      })
+    const updated = rooms.map((r) =>
+      r.id === roomId ? { ...r, occupants: [...r.occupants, newOccupant] } : r
     );
+    setRooms(updated);
+    hostelDB.saveAllRoomsToCloud(updated);
   };
 
   const handleAddComplaint = (
@@ -770,28 +769,12 @@ export default function App() {
           />
         )}
 
-       {activeTab === 'attendance' && (
+        {activeTab === 'attendance' && (
           <div className="space-y-6">
             {/* 🎯 Year-Wise Missed Attendance & 1-Click Push Terminal */}
             <MissedAttendanceManager
               role={role}
-              onSendNoticeToGroup={(yearGroup, studentName, faceId) => {
-                const now = new Date();
-                const timeStr = `${now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-
-                const missedMsg: YearGroupMessage = {
-                  id: `auto-${Date.now()}`,
-                  yearGroup,
-                  senderName: 'Hostel System Automation',
-                  senderRole: 'System Automation',
-                  message: `🚨 MISSED BIOMETRIC ATTENDANCE ALERT:\n👤 Student Name: ${studentName}\n🆔 Biometric Face ID: ${faceId}\n\n⚠️ Turant Main Gate par jakar apna Biometric Face ID punch karein.`,
-                  timestamp: timeStr,
-                  isAutomatedMissedNotice: true,
-                  flaggedStudentName: studentName
-                };
-
-                setYearGroupMessages((prev) => [missedMsg, ...prev]);
-              }}
+              onSendNoticeToGroup={handlePushMissedAttendanceNotice}
             />
 
             <AttendanceSection
