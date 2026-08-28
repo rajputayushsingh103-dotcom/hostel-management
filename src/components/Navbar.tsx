@@ -228,7 +228,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <Building2 className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-xs font-black tracking-wider uppercase">Hostel Suite</h3>
+                    <h3 className="text-xs font-black tracking-wider uppercase">Hostel Hub</h3>
                     <p className="text-[10px] text-indigo-500 font-semibold">Campus Operations</p>
                   </div>
                 </div>

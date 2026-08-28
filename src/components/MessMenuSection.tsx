@@ -1,3 +1,4 @@
+// src/components/MessMenuSection.tsx
 import React, { useState } from 'react';
 import {
   Utensils,
@@ -10,8 +11,7 @@ import {
   Coffee,
   Sunset,
   Moon,
-  RotateCcw,
-  Printer
+  RotateCcw
 } from 'lucide-react';
 import { DayMessMenu, Role } from '../types';
 
@@ -254,7 +254,8 @@ export const MessMenuSection: React.FC<MessMenuSectionProps> = ({
   const [editTime, setEditTime] = useState('');
   const [editItemsText, setEditItemsText] = useState('');
 
-  const activeList = EXACT_PHOTO_MESS_MENU;
+  // 🟢 FIXED: Live Database Menu connect kiya (agar database me data hai toh wo dikhega)
+  const activeList = menuList && menuList.length > 0 ? menuList : EXACT_PHOTO_MESS_MENU;
   const currentDayMenu = activeList.find((m) => m.day === selectedDay) || activeList[0];
 
   const handleRating = (key: string, rating: number) => {
@@ -474,7 +475,7 @@ export const MessMenuSection: React.FC<MessMenuSectionProps> = ({
         </div>
       )}
 
-      {/* 🌟 4 MEAL CARDS (CLEAN WHITE BACKGROUND & SOLID BLACK/DARK TEXT) */}
+      {/* 🌟 4 MEAL CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {mealCards.map(({ key, label, icon: Icon, detail }) => {
           const ratingKey = `${selectedDay}-${key}`;
