@@ -103,7 +103,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center pt-16 p-4 relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center pt-30 p-4 relative overflow-hidden font-sans">
       {/* Ambient Gradient Glows */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-indigo-600/15 blur-[140px] rounded-full pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-72 h-72 bg-amber-500/10 blur-[100px] rounded-full pointer-events-none" />
