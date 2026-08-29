@@ -160,7 +160,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
         {/* Student Login Form */}
         {activeTab === 'student' && (
-          <form onSubmit={handleStudentLogin} className="space-y-4">
+          <form onSubmit={handleStudentLogin} className="space-y-4"
+           style={{ marginTop: '40px' }}>
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1.5">Student Roll Number:</label>
               <div className="relative">
