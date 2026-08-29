@@ -125,7 +125,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           
           {/* Left: Hamburger & Brand */}
-          <div className="flex items-center gap-3.5">
+          <div className="flex items-center gap-2.5 sm:gap-3.5">
             <button
               onClick={() => setIsSidebarOpen(true)}
               className={`p-2.5 rounded-2xl border transition-all flex items-center gap-2 group active:scale-95 ${
@@ -139,32 +139,34 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="text-xs font-bold tracking-tight hidden sm:inline">Menu</span>
             </button>
 
-            <div className={`flex items-center gap-3 pl-3 border-l ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center font-black text-sm shadow-md shadow-indigo-600/30">
+            {/* 🟢 HOSTELHUB (UPAR) & SECTION BADGE (NICHE) */}
+            <div className={`flex items-center gap-2.5 pl-2.5 sm:pl-3 border-l ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center font-black text-sm shadow-md shadow-indigo-600/30 shrink-0">
                 H
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-black tracking-tight">HostelHub</span>
-                  <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border ${
-                    isDarkMode
-                      ? 'bg-slate-900 text-indigo-300 border-slate-800'
-                      : 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                  }`}>
-                    {currentItem.label}
-                  </span>
-                </div>
+              <div className="flex flex-col items-start justify-center">
+                {/* Line 1: HostelHub (Upar) */}
+                <span className="text-xs sm:text-sm font-black tracking-tight leading-none">HostelHub</span>
+                
+                {/* Line 2: Active Tab Badge (Niche) */}
+                <span className={`text-[9px] sm:text-[10px] font-mono font-bold px-2 py-0.5 mt-1 rounded-full border max-w-[130px] sm:max-w-none truncate ${
+                  isDarkMode
+                    ? 'bg-slate-900 text-indigo-300 border-slate-800'
+                    : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                }`}>
+                  {currentItem.label}
+                </span>
               </div>
             </div>
           </div>
 
           {/* Right Controls */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             
             {/* Theme Toggle Pill */}
             <button
               onClick={onToggleTheme}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs active:scale-95 ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs active:scale-95 ${
                 isDarkMode
                   ? 'bg-slate-900/90 hover:bg-slate-800 text-amber-300 border-slate-800 hover:border-amber-500/30'
                   : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
@@ -194,7 +196,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Logout */}
             <button
               onClick={onLogout}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 ${
                 isDarkMode
                   ? 'bg-slate-900/90 hover:bg-red-950/40 text-slate-400 hover:text-red-400 border-slate-800 hover:border-red-500/30'
                   : 'bg-slate-50 hover:bg-red-50 text-slate-600 hover:text-red-600 border-slate-200 hover:border-red-200'
