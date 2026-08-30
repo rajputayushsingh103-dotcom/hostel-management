@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { MissedAttendanceManager } from './components/MissedAttendanceManager';
 import { LoginPage } from './components/LoginPage';
@@ -79,6 +79,31 @@ export default function App() {
   };
 
   const [activeTab, setActiveTab] = useState<string>('leave');
+  const previousTabs = useRef<string[]>([]);
+
+const handleTabChange = (newTab: string) => {
+  if (newTab !== activeTab) {
+    previousTabs.current.push(activeTab);
+  }
+  setActiveTab(newTab);
+};
+
+useEffect(() => {
+  const handleBack = () => {
+    if (previousTabs.current.length > 0) {
+      const previousTab = previousTabs.current.pop();
+      if (previousTab) {
+        setActiveTab(previousTab);
+      }
+    }
+  };
+
+  window.addEventListener('popstate', handleBack);
+
+  return () => {
+    window.removeEventListener('popstate', handleBack);
+  };
+}, []);
 
   const [menuList, setMenuList] = useState<DayMessMenu[]>(() => {
     const saved = localStorage.getItem('hostel_menu');
@@ -683,7 +708,7 @@ export default function App() {
     }`}>
       <Navbar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleTabChange}
         role={role}
         userSession={userSession}
         onLogout={handleLogout}
